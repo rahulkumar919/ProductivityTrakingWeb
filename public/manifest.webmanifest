@@ -1,0 +1,12 @@
+{
+  "name": "DevTrack AI",
+  "short_name": "DevTrack",
+  "description": "Personal daily routine and productivity tracker.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#f7f7f2",
+  "theme_color": "#16614f",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

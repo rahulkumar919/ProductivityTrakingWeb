@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DevTrack AI
 
-## Getting Started
+Personal daily routine, focus, habits, goals, analytics, and AI productivity coach built with Next.js 15, TypeScript, Tailwind CSS, MongoDB, JWT cookies, Gemini, Nodemailer, and Recharts.
 
-First, run the development server:
+## Run locally
 
 ```bash
+npm install
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000/dashboard`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The UI ships with demo data so the product is usable immediately. Add `MONGODB_URI` and `JWT_SECRET` to enable persistent auth and database APIs.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Folder structure
 
-## Learn More
+```text
+src/app              App Router pages, layouts, and API route handlers
+src/components       App shell, feature modules, charts, providers, UI primitives
+src/lib              Auth, db, server actions, AI, email, validators, utilities
+src/models           Complete Mongoose schemas for all collections
+src/types            Shared TypeScript domain types
+src/data             Local demo data for first-run UX
+public               PWA manifest, service worker, icon
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Collections
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`users`, `tasks`, `goals`, `habits`, `activitylogs`, `timesessions`, `routines`, and `analytics` are represented in `src/models`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment
 
-## Deploy on Vercel
+1. Create a MongoDB Atlas database and set `MONGODB_URI`.
+2. Set a strong `JWT_SECRET`.
+3. Add `GEMINI_API_KEY` for live AI coaching.
+4. Add SMTP variables for reminder emails and daily summaries.
+5. Deploy to Vercel and copy the same env vars into the Vercel project.
+6. Set `NEXT_PUBLIC_APP_URL` to the production URL.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Production notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Authentication uses bcrypt password hashing, JWT signing, and HTTP-only cookies.
+- Route handlers are colocated under `src/app/api`.
+- Server actions are in `src/lib/actions.ts`.
+- PWA support is in `public/manifest.webmanifest`, `public/sw.js`, and `PwaRegister`.
+- The app intentionally supports a single personal account and does not include teams, OAuth, Stripe, or subscription logic.
