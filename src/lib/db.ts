@@ -22,7 +22,7 @@ export async function connectToDatabase() {
 
   cache.promise ??= mongoose.connect(env.mongodbUri, {
     bufferCommands: false,
-    dbName: process.env.MONGODB_DB ?? "devtrack_ai",
+    dbName: env.mongodbDb,
   });
 
   cache.conn = await cache.promise;

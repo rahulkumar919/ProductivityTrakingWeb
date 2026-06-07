@@ -4,6 +4,8 @@ import { generateProductivityInsights } from "@/lib/ai";
 import { demoGoals, demoHabits, demoRoutine, demoSessions, demoTasks } from "@/data/demo";
 import { calculateProductivityScore } from "@/lib/productivity";
 
+export const dynamic = "force-dynamic";
+
 export default async function AiInsightsPage() {
   const score = calculateProductivityScore({ tasks: demoTasks, habits: demoHabits, routine: demoRoutine, sessions: demoSessions, goals: demoGoals });
   const insight = await generateProductivityInsights(JSON.stringify({ score, tasks: demoTasks, habits: demoHabits, routine: demoRoutine, goals: demoGoals, sessions: demoSessions }, null, 2));

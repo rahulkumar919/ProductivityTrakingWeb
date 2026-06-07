@@ -1,11 +1,18 @@
+function optionalEnv(name: string) {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
 export const env = {
-  mongodbUri: process.env.MONGODB_URI,
-  jwtSecret: process.env.JWT_SECRET ?? "devtrack-local-secret-change-me",
-  geminiApiKey: process.env.GEMINI_API_KEY,
-  smtpHost: process.env.SMTP_HOST,
-  smtpPort: Number(process.env.SMTP_PORT ?? 587),
-  smtpUser: process.env.SMTP_USER,
-  smtpPass: process.env.SMTP_PASS,
-  reminderEmailTo: process.env.REMINDER_EMAIL_TO,
-  appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  mongodbUri: optionalEnv("MONGODB_URI"),
+  mongodbDb: optionalEnv("MONGODB_DB") ?? "devtrack_ai",
+  jwtSecret: optionalEnv("JWT_SECRET") ?? "devtrack-local-secret-change-me",
+  geminiApiKey: optionalEnv("GEMINI_API_KEY"),
+  geminiModel: optionalEnv("GEMINI_MODEL") ?? "gemini-2.0-flash",
+  smtpHost: optionalEnv("SMTP_HOST"),
+  smtpPort: Number(optionalEnv("SMTP_PORT") ?? 587),
+  smtpUser: optionalEnv("SMTP_USER"),
+  smtpPass: optionalEnv("SMTP_PASS"),
+  reminderEmailTo: optionalEnv("REMINDER_EMAIL_TO"),
+  appUrl: optionalEnv("NEXT_PUBLIC_APP_URL") ?? "http://localhost:3000",
 };
