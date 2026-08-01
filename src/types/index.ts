@@ -4,6 +4,14 @@ export type TaskStatus = "Todo" | "In Progress" | "Completed";
 export type GoalPeriod = "Daily" | "Weekly" | "Monthly";
 export type SessionMode = "Pomodoro" | "Deep Work" | "Study Session" | "Coding Session";
 
+export type LearningEntry = {
+  id: string;
+  taskId: string;
+  date: string;         // ISO date string e.g. "2026-07-24"
+  note: string;
+  images: string[];     // base64 data URLs
+};
+
 export type Task = {
   id: string;
   title: string;

@@ -7,12 +7,40 @@ import { Card } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/form";
 import type { SessionMode } from "@/types";
 
+const SESSIONS_KEY = "devtrack_sessions";
+const ACTIVITY_KEY = "devtrack_activities";
+
 const modeMinutes: Record<SessionMode, number> = {
   Pomodoro: 25,
   "Deep Work": 90,
   "Study Session": 60,
   "Coding Session": 60,
 };
+
+function appendActivity(type: string, description: string) {
+  try {
+    const raw = localStorage.getItem(ACTIVITY_KEY);
+    const existing = raw ? JSON.parse(raw) : [];
+    existing.unshift({ id: crypto.randomUUID(), type, description, createdAt: new Date().toISOString() });
+    localStorage.setItem(ACTIVITY_KEY, JSON.stringify(existing.slice(0, 200)));
+  } catch { /* ignore */ }
+}
+
+function saveSession(session: { mode: SessionMode; taskTitle: string; minutes: number }) {
+  try {
+    const raw = localStorage.getItem(SESSIONS_KEY);
+    const existing = raw ? JSON.parse(raw) : [];
+    existing.unshift({
+      id: crypto.randomUUID(),
+      mode: session.mode,
+      taskTitle: session.taskTitle,
+      durationMinutes: session.minutes,
+      startedAt: new Date(Date.now() - session.minutes * 60000).toISOString(),
+      endedAt: new Date().toISOString(),
+    });
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(existing.slice(0, 100)));
+  } catch { /* ignore */ }
+}
 
 export function FocusTimer() {
   const [mode, setMode] = useState<SessionMode>("Pomodoro");
@@ -31,7 +59,14 @@ export function FocusTimer() {
 
   function stop() {
     const used = modeMinutes[mode] - Math.ceil(remaining / 60);
-    if (used > 0) setSessions((current) => [{ mode, taskTitle, minutes: used }, ...current]);
+    if (used > 0) {
+      setSessions((current) => [{ mode, taskTitle, minutes: used }, ...current]);
+      saveSession({ mode, taskTitle, minutes: used });
+      appendActivity(
+        "Focus Session Completed",
+        `${mode}${taskTitle ? ` — ${taskTitle}` : ""} · ${used} minutes`
+      );
+    }
     setRunning(false);
     setRemaining(modeMinutes[mode] * 60);
   }

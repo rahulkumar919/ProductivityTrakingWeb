@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, BarChart3, Brain, CalendarCheck, CheckSquare, Dumbbell, Flame, Gauge, Target, Timer, User } from "lucide-react";
+import { Activity, BarChart3, Brain, CalendarCheck, CheckSquare, Code2, Dumbbell, Flame, Gauge, Target, Timer, User } from "lucide-react";
 import { ThemeToggle } from "@/components/app/theme-toggle";
 
 const nav = [
@@ -9,6 +9,7 @@ const nav = [
   { href: "/habits", label: "Habits", icon: Flame },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/timer", label: "Focus Timer", icon: Timer },
+  { href: "/dsa", label: "DSA Revision", icon: Code2 },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/ai-insights", label: "AI Insights", icon: Brain },
