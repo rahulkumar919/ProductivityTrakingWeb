@@ -10,9 +10,9 @@ import {
 
 const STAT_CARDS = [
   { icon: TrendingUp, label: "Study Hours", value: "3h", color: "#5ec4a8", bg: "rgba(94,196,168,0.12)" },
-  { icon: Code2,      label: "Coding Hours", value: "4h", color: "#f18b67", bg: "rgba(241,139,103,0.12)" },
-  { icon: Dumbbell,   label: "Gym Time",     value: "60m", color: "#74d2bb", bg: "rgba(116,210,187,0.12)" },
-  { icon: Zap,        label: "Focus Score",  value: "87%", color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
+  { icon: Code2, label: "Coding Hours", value: "4h", color: "#f18b67", bg: "rgba(241,139,103,0.12)" },
+  { icon: Dumbbell, label: "Gym Time", value: "60m", color: "#74d2bb", bg: "rgba(116,210,187,0.12)" },
+  { icon: Zap, label: "Focus Score", value: "87%", color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
 ];
 
 export default function ProfilePage() {
@@ -106,7 +106,7 @@ export default function ProfilePage() {
                 onClick={() => setActiveTab(tab)}
               >
                 {tab === "personal" && <User size={14} />}
-                {tab === "targets"  && <Target size={14} />}
+                {tab === "targets" && <Target size={14} />}
                 {tab === "security" && <Shield size={14} />}
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
@@ -566,7 +566,7 @@ export default function ProfilePage() {
 
 /* ── Sub-components ── */
 function FieldGroup({
-  id, label, icon: Icon, focusedField, setFocused, span, children,
+  id, label, icon: Icon, focusedField, setFocused: _setFocused, span, children,
 }: {
   id: string; label: string; icon: React.ElementType;
   focusedField: string | null; setFocused: (v: string | null) => void;

@@ -2,7 +2,6 @@
 
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
-import { HoursBar, ProductivityArea } from "@/components/charts/productivity-charts";
 import { BarChart2 } from "lucide-react";
 
 const METRICS = [

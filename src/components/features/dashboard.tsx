@@ -4,7 +4,7 @@ import { Activity, CheckCircle2, Clock, Code2, Dumbbell, Flame, ListTodo, Timer 
 import { useEffect, useState } from "react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { HoursBar, ProductivityArea } from "@/components/charts/productivity-charts";
-import type { Goal, Habit, RoutineItem, Task, TimeSession } from "@/types";
+import type { Goal, Habit, Task, TimeSession } from "@/types";
 
 function load<T>(key: string): T[] {
   try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : []; } catch { return []; }
@@ -14,7 +14,6 @@ export function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [sessions, setSessions] = useState<TimeSession[]>([]);
-  const [routine, setRoutine] = useState<RoutineItem[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
@@ -22,7 +21,6 @@ export function Dashboard() {
     setTasks(load("devtrack_tasks"));
     setHabits(load("devtrack_habits"));
     setSessions(load("devtrack_sessions"));
-    setRoutine(load("devtrack_routine"));
     setGoals(load("devtrack_goals"));
     setHydrated(true);
   }, []);

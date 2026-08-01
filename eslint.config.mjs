@@ -7,12 +7,22 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Loading from localStorage on mount inside useEffect is a valid pattern —
+      // this rule is too aggressive for client-side hydration code.
+      "react-hooks/set-state-in-effect": "off",
+      // Unused vars as warnings only, not errors.
+      "@typescript-eslint/no-unused-vars": "warn",
+      // <img> tags are intentional for base64 data URLs (Next Image can't handle them).
+      "@next/next/no-img-element": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-    BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight,
+    Check, CheckCircle2, ChevronDown, ChevronRight,
     ChevronUp, Code2, Copy, ExternalLink, Filter,
     RotateCcw, Search, Sparkles, Star, Trophy, X, Zap,
 } from "lucide-react";
