@@ -3,8 +3,12 @@ import mongoose, { Schema, models, model } from "mongoose";
 const UserSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
-    mobileNumber: { type: String, required: true, unique: true, trim: true },
-    passwordHash: { type: String, required: true },
+    mobileNumber: { type: String, trim: true, default: "" },
+    email: { type: String, trim: true, lowercase: true, default: "" },
+    passwordHash: { type: String, default: "" },
+    googleId: { type: String, default: "" },
+    avatarUrl: { type: String, default: "" },
+    avatarPublicId: { type: String, default: "" },
     profession: { type: String, default: "Student Developer" },
     dailyTargetStudyHours: { type: Number, default: 3 },
     dailyTargetCodingHours: { type: Number, default: 4 },

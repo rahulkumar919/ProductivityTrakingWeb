@@ -2344,4 +2344,1087 @@ class MedianFinder {
       },
     ],
   },
+  // ── Dynamic Programming ──────────────────────────────────────────
+  {
+    id: "dp",
+    name: "Dynamic Programming",
+    emoji: "🧩",
+    color: "#8b5cf6",
+    questions: [
+      {
+        id: "climbing-stairs",
+        title: "Climbing Stairs",
+        category: "Dynamic Programming",
+        difficulty: "Easy",
+        trick: "Same as Fibonacci — dp[i] = dp[i-1] + dp[i-2]. Just two variables needed.",
+        approach: "f(n) = f(n-1) + f(n-2). Use two vars and iterate.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/climbing-stairs/",
+        code: `function climbStairs(n) {
+  let a = 1, b = 1;
+  for (let i = 2; i <= n; i++) [a, b] = [b, a + b];
+  return b;
+}`,
+      },
+      {
+        id: "coin-change",
+        title: "Coin Change",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[i] = min coins for amount i. Try every coin: dp[i] = min(dp[i], dp[i-coin]+1).",
+        approach: "Init dp array with Infinity. dp[0]=0. For each amount, try each coin.",
+        timeComplexity: "O(amount × coins)",
+        spaceComplexity: "O(amount)",
+        leetcodeUrl: "https://leetcode.com/problems/coin-change/",
+        code: `function coinChange(coins, amount) {
+  const dp = Array(amount + 1).fill(Infinity);
+  dp[0] = 0;
+  for (let i = 1; i <= amount; i++)
+    for (const c of coins)
+      if (c <= i) dp[i] = Math.min(dp[i], dp[i - c] + 1);
+  return dp[amount] === Infinity ? -1 : dp[amount];
+}`,
+      },
+      {
+        id: "longest-increasing-subsequence",
+        title: "Longest Increasing Subsequence",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[i] = LIS ending at i. For each j<i, if nums[j]<nums[i] → dp[i]=max(dp[i],dp[j]+1).",
+        approach: "O(n²) DP or O(n log n) with patience sorting / binary search.",
+        timeComplexity: "O(n log n)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/longest-increasing-subsequence/",
+        code: `function lengthOfLIS(nums) {
+  const tails = [];
+  for (const n of nums) {
+    let lo = 0, hi = tails.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      tails[mid] < n ? lo = mid + 1 : hi = mid;
+    }
+    tails[lo] = n;
+  }
+  return tails.length;
+}`,
+      },
+      {
+        id: "word-break",
+        title: "Word Break",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[i] = can we form s[0..i-1] from dict. dp[i] = any dp[j] && s[j..i] in dict.",
+        approach: "Boolean DP array. For each i, check all j < i.",
+        timeComplexity: "O(n² × m)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/word-break/",
+        code: `function wordBreak(s, wordDict) {
+  const set = new Set(wordDict);
+  const dp = Array(s.length + 1).fill(false);
+  dp[0] = true;
+  for (let i = 1; i <= s.length; i++)
+    for (let j = 0; j < i; j++)
+      if (dp[j] && set.has(s.slice(j, i))) { dp[i] = true; break; }
+  return dp[s.length];
+}`,
+      },
+      {
+        id: "unique-paths",
+        title: "Unique Paths",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[r][c] = paths from top-left to (r,c). dp[r][c] = dp[r-1][c] + dp[r][c-1].",
+        approach: "2D DP grid. First row/col all 1s. Fill rest by summing up + left.",
+        timeComplexity: "O(m × n)",
+        spaceComplexity: "O(m × n)",
+        leetcodeUrl: "https://leetcode.com/problems/unique-paths/",
+        code: `function uniquePaths(m, n) {
+  const dp = Array.from({length: m}, () => Array(n).fill(1));
+  for (let r = 1; r < m; r++)
+    for (let c = 1; c < n; c++)
+      dp[r][c] = dp[r-1][c] + dp[r][c-1];
+  return dp[m-1][n-1];
+}`,
+      },
+      {
+        id: "house-robber",
+        title: "House Robber",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[i] = max loot at house i. Can't rob adjacent: dp[i] = max(dp[i-1], dp[i-2] + nums[i]).",
+        approach: "Track two vars prev2, prev1. Update each step.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/house-robber/",
+        code: `function rob(nums) {
+  let prev2 = 0, prev1 = 0;
+  for (const n of nums) {
+    [prev2, prev1] = [prev1, Math.max(prev1, prev2 + n)];
+  }
+  return prev1;
+}`,
+      },
+      {
+        id: "longest-common-subsequence",
+        title: "Longest Common Subsequence",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[i][j] = LCS of text1[0..i] & text2[0..j]. Match → +1, else max of skip one.",
+        approach: "2D DP. If chars match: dp[i][j]=dp[i-1][j-1]+1, else max(dp[i-1][j], dp[i][j-1]).",
+        timeComplexity: "O(m × n)",
+        spaceComplexity: "O(m × n)",
+        leetcodeUrl: "https://leetcode.com/problems/longest-common-subsequence/",
+        code: `function longestCommonSubsequence(text1, text2) {
+  const m = text1.length, n = text2.length;
+  const dp = Array.from({length: m+1}, () => Array(n+1).fill(0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = text1[i-1]===text2[j-1]
+        ? dp[i-1][j-1]+1
+        : Math.max(dp[i-1][j], dp[i][j-1]);
+  return dp[m][n];
+}`,
+      },
+      {
+        id: "edit-distance",
+        title: "Edit Distance",
+        category: "Dynamic Programming",
+        difficulty: "Hard",
+        trick: "dp[i][j] = min ops to convert word1[0..i] to word2[0..j]. Insert/delete/replace = +1.",
+        approach: "If chars match: dp[i][j]=dp[i-1][j-1]. Else 1+min(insert, delete, replace).",
+        timeComplexity: "O(m × n)",
+        spaceComplexity: "O(m × n)",
+        leetcodeUrl: "https://leetcode.com/problems/edit-distance/",
+        code: `function minDistance(word1, word2) {
+  const m = word1.length, n = word2.length;
+  const dp = Array.from({length: m+1}, (_, i) => Array.from({length: n+1}, (_, j) => i || j));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = word1[i-1]===word2[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j-1], dp[i-1][j], dp[i][j-1]);
+  return dp[m][n];
+}`,
+      },
+      {
+        id: "0-1-knapsack",
+        title: "0/1 Knapsack",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[w] = max value at capacity w. Iterate weights in reverse to avoid reuse.",
+        approach: "1D DP. For each item, iterate w from capacity down to item weight.",
+        timeComplexity: "O(n × W)",
+        spaceComplexity: "O(W)",
+        leetcodeUrl: "https://leetcode.com/problems/partition-equal-subset-sum/",
+        code: `function canPartition(nums) {
+  const total = nums.reduce((s, n) => s + n, 0);
+  if (total % 2) return false;
+  const target = total / 2;
+  const dp = Array(target + 1).fill(false);
+  dp[0] = true;
+  for (const n of nums)
+    for (let w = target; w >= n; w--)
+      dp[w] = dp[w] || dp[w - n];
+  return dp[target];
+}`,
+      },
+      {
+        id: "palindromic-substrings",
+        title: "Palindromic Substrings",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "Expand around center for each char (and pair). Count every valid expansion.",
+        approach: "For each center (2n-1 centers), expand while s[l]===s[r], count each.",
+        timeComplexity: "O(n²)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/palindromic-substrings/",
+        code: `function countSubstrings(s) {
+  let count = 0;
+  function expand(l, r) {
+    while (l >= 0 && r < s.length && s[l] === s[r]) { count++; l--; r++; }
+  }
+  for (let i = 0; i < s.length; i++) { expand(i, i); expand(i, i+1); }
+  return count;
+}`,
+      },
+      {
+        id: "decode-ways",
+        title: "Decode Ways",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[i] = ways to decode s[0..i-1]. 1-digit and 2-digit checks. '0' alone is invalid.",
+        approach: "dp[0]=1, dp[1]= s[0]!='0'?1:0. For i≥2 check single and double digits.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/decode-ways/",
+        code: `function numDecodings(s) {
+  const n = s.length;
+  const dp = Array(n + 1).fill(0);
+  dp[0] = 1;
+  dp[1] = s[0] !== '0' ? 1 : 0;
+  for (let i = 2; i <= n; i++) {
+    const one = +s[i-1], two = +s.slice(i-2, i);
+    if (one >= 1) dp[i] += dp[i-1];
+    if (two >= 10 && two <= 26) dp[i] += dp[i-2];
+  }
+  return dp[n];
+}`,
+      },
+      {
+        id: "maximal-square",
+        title: "Maximal Square",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[r][c] = side of largest square with bottom-right at (r,c). '1' → min(up,left,diag)+1.",
+        approach: "If matrix[r][c]='1': dp[r][c]=min(dp[r-1][c], dp[r][c-1], dp[r-1][c-1])+1.",
+        timeComplexity: "O(m × n)",
+        spaceComplexity: "O(m × n)",
+        leetcodeUrl: "https://leetcode.com/problems/maximal-square/",
+        code: `function maximalSquare(matrix) {
+  const m=matrix.length, n=matrix[0].length;
+  const dp = Array.from({length:m+1},()=>Array(n+1).fill(0));
+  let best = 0;
+  for (let r=1;r<=m;r++) for (let c=1;c<=n;c++) {
+    if (matrix[r-1][c-1]==='1') {
+      dp[r][c]=Math.min(dp[r-1][c],dp[r][c-1],dp[r-1][c-1])+1;
+      best=Math.max(best,dp[r][c]);
+    }
+  }
+  return best*best;
+}`,
+      },
+      {
+        id: "burst-balloons",
+        title: "Burst Balloons",
+        category: "Dynamic Programming",
+        difficulty: "Hard",
+        trick: "Think in reverse: last balloon to burst in range [l,r]. dp[l][r] = max coins if k is last.",
+        approach: "Interval DP. dp[l][r] = max over k in (l,r): dp[l][k]+dp[k][r]+nums[l]*nums[k]*nums[r].",
+        timeComplexity: "O(n³)",
+        spaceComplexity: "O(n²)",
+        leetcodeUrl: "https://leetcode.com/problems/burst-balloons/",
+        code: `function maxCoins(nums) {
+  nums = [1, ...nums, 1];
+  const n = nums.length;
+  const dp = Array.from({length:n},()=>Array(n).fill(0));
+  for (let len=2; len<n; len++)
+    for (let l=0; l<n-len; l++) {
+      const r = l+len;
+      for (let k=l+1; k<r; k++)
+        dp[l][r]=Math.max(dp[l][r], dp[l][k]+dp[k][r]+nums[l]*nums[k]*nums[r]);
+    }
+  return dp[0][n-1];
+}`,
+      },
+      {
+        id: "min-path-sum",
+        title: "Minimum Path Sum",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "dp[r][c] = min cost to reach (r,c). dp[r][c] = grid[r][c] + min(dp[r-1][c], dp[r][c-1]).",
+        approach: "Fill grid in-place or use DP table. First row/col init separately.",
+        timeComplexity: "O(m × n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/minimum-path-sum/",
+        code: `function minPathSum(grid) {
+  const m=grid.length, n=grid[0].length;
+  for (let r=0;r<m;r++) for (let c=0;c<n;c++) {
+    if (r===0&&c===0) continue;
+    const up = r>0 ? grid[r-1][c] : Infinity;
+    const left = c>0 ? grid[r][c-1] : Infinity;
+    grid[r][c] += Math.min(up, left);
+  }
+  return grid[m-1][n-1];
+}`,
+      },
+      {
+        id: "longest-palindromic-substring",
+        title: "Longest Palindromic Substring",
+        category: "Dynamic Programming",
+        difficulty: "Medium",
+        trick: "Expand around center (2n-1 centers). Track best start/len.",
+        approach: "For each center, expand while equal chars. Record longest.",
+        timeComplexity: "O(n²)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/longest-palindromic-substring/",
+        code: `function longestPalindrome(s) {
+  let start=0, maxLen=1;
+  function expand(l,r) {
+    while(l>=0&&r<s.length&&s[l]===s[r]){
+      if(r-l+1>maxLen){maxLen=r-l+1;start=l;}
+      l--;r++;
+    }
+  }
+  for(let i=0;i<s.length;i++){expand(i,i);expand(i,i+1);}
+  return s.slice(start,start+maxLen);
+}`,
+      },
+    ],
+  },
+  // ── Backtracking ─────────────────────────────────────────────────
+  {
+    id: "backtracking",
+    name: "Backtracking",
+    emoji: "🔁",
+    color: "#ec4899",
+    questions: [
+      {
+        id: "subsets",
+        title: "Subsets",
+        category: "Backtracking",
+        difficulty: "Medium",
+        trick: "At each index: choose to include or not. DFS through all possibilities.",
+        approach: "Backtrack: push current subset, then recurse with/without each remaining element.",
+        timeComplexity: "O(2ⁿ)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/subsets/",
+        code: `function subsets(nums) {
+  const res = [];
+  function bt(i, cur) {
+    res.push([...cur]);
+    for (let j = i; j < nums.length; j++) {
+      cur.push(nums[j]);
+      bt(j + 1, cur);
+      cur.pop();
+    }
+  }
+  bt(0, []);
+  return res;
+}`,
+      },
+      {
+        id: "permutations",
+        title: "Permutations",
+        category: "Backtracking",
+        difficulty: "Medium",
+        trick: "Swap nums[i] with each nums[j≥i], recurse, swap back. Classic in-place.",
+        approach: "At each position pick any remaining. Use visited array or swap-based.",
+        timeComplexity: "O(n!)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/permutations/",
+        code: `function permute(nums) {
+  const res = [];
+  function bt(start) {
+    if (start === nums.length) { res.push([...nums]); return; }
+    for (let i = start; i < nums.length; i++) {
+      [nums[start], nums[i]] = [nums[i], nums[start]];
+      bt(start + 1);
+      [nums[start], nums[i]] = [nums[i], nums[start]];
+    }
+  }
+  bt(0);
+  return res;
+}`,
+      },
+      {
+        id: "combination-sum",
+        title: "Combination Sum",
+        category: "Backtracking",
+        difficulty: "Medium",
+        trick: "Can reuse candidates. DFS: subtract candidate from target. Base: target===0 → add.",
+        approach: "Backtrack from index i, allowing reuse (recurse with same i).",
+        timeComplexity: "O(2^(t/min))",
+        spaceComplexity: "O(t/min)",
+        leetcodeUrl: "https://leetcode.com/problems/combination-sum/",
+        code: `function combinationSum(candidates, target) {
+  const res = [];
+  function bt(i, cur, rem) {
+    if (rem === 0) { res.push([...cur]); return; }
+    if (rem < 0 || i === candidates.length) return;
+    cur.push(candidates[i]);
+    bt(i, cur, rem - candidates[i]);
+    cur.pop();
+    bt(i + 1, cur, rem);
+  }
+  bt(0, [], target);
+  return res;
+}`,
+      },
+      {
+        id: "n-queens",
+        title: "N-Queens",
+        category: "Backtracking",
+        difficulty: "Hard",
+        trick: "Track cols, diag1 (r-c), diag2 (r+c) sets. Place queen if none conflict.",
+        approach: "Row by row, try each col. If safe (3 sets check), place and recurse.",
+        timeComplexity: "O(n!)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/n-queens/",
+        code: `function solveNQueens(n) {
+  const res = [], cols = new Set(), d1 = new Set(), d2 = new Set();
+  const board = Array.from({length:n}, () => Array(n).fill('.'));
+  function bt(r) {
+    if (r === n) { res.push(board.map(row => row.join(''))); return; }
+    for (let c = 0; c < n; c++) {
+      if (cols.has(c) || d1.has(r-c) || d2.has(r+c)) continue;
+      cols.add(c); d1.add(r-c); d2.add(r+c); board[r][c] = 'Q';
+      bt(r + 1);
+      cols.delete(c); d1.delete(r-c); d2.delete(r+c); board[r][c] = '.';
+    }
+  }
+  bt(0);
+  return res;
+}`,
+      },
+      {
+        id: "letter-combinations",
+        title: "Letter Combinations of a Phone Number",
+        category: "Backtracking",
+        difficulty: "Medium",
+        trick: "Map digit→letters. DFS: for each digit pick one letter, recurse to next digit.",
+        approach: "Backtrack through digits. At each step try all mapped letters.",
+        timeComplexity: "O(4ⁿ × n)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/letter-combinations-of-a-phone-number/",
+        code: `function letterCombinations(digits) {
+  if (!digits) return [];
+  const map = {'2':'abc','3':'def','4':'ghi','5':'jkl','6':'mno','7':'pqrs','8':'tuv','9':'wxyz'};
+  const res = [];
+  function bt(i, cur) {
+    if (i === digits.length) { res.push(cur); return; }
+    for (const c of map[digits[i]]) bt(i+1, cur+c);
+  }
+  bt(0, '');
+  return res;
+}`,
+      },
+      {
+        id: "word-search",
+        title: "Word Search",
+        category: "Backtracking",
+        difficulty: "Medium",
+        trick: "DFS from each cell. Mark visited by temp char change. Restore on backtrack.",
+        approach: "For each cell, DFS in 4 directions matching word chars. Mark & unmark visited.",
+        timeComplexity: "O(m × n × 4^L)",
+        spaceComplexity: "O(L)",
+        leetcodeUrl: "https://leetcode.com/problems/word-search/",
+        code: `function exist(board, word) {
+  const m = board.length, n = board[0].length;
+  function dfs(r, c, i) {
+    if (i === word.length) return true;
+    if (r<0||r>=m||c<0||c>=n||board[r][c]!==word[i]) return false;
+    const tmp = board[r][c]; board[r][c] = '#';
+    const found = dfs(r+1,c,i+1)||dfs(r-1,c,i+1)||dfs(r,c+1,i+1)||dfs(r,c-1,i+1);
+    board[r][c] = tmp;
+    return found;
+  }
+  for (let r=0;r<m;r++) for (let c=0;c<n;c++) if (dfs(r,c,0)) return true;
+  return false;
+}`,
+      },
+      {
+        id: "palindrome-partitioning",
+        title: "Palindrome Partitioning",
+        category: "Backtracking",
+        difficulty: "Medium",
+        trick: "DFS: at each index, try all substrings starting here. If palindrome → recurse rest.",
+        approach: "Backtrack: for each end, if s[start..end] is palindrome, push and recurse from end+1.",
+        timeComplexity: "O(n × 2ⁿ)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/palindrome-partitioning/",
+        code: `function partition(s) {
+  const res = [];
+  function isPalin(l,r){ while(l<r) if(s[l++]!==s[r--]) return false; return true; }
+  function bt(start, cur) {
+    if (start === s.length) { res.push([...cur]); return; }
+    for (let end = start; end < s.length; end++) {
+      if (isPalin(start, end)) {
+        cur.push(s.slice(start, end+1));
+        bt(end+1, cur);
+        cur.pop();
+      }
+    }
+  }
+  bt(0, []);
+  return res;
+}`,
+      },
+      {
+        id: "sudoku-solver",
+        title: "Sudoku Solver",
+        category: "Backtracking",
+        difficulty: "Hard",
+        trick: "Try 1-9 in each empty cell. Check row/col/box. Backtrack if stuck.",
+        approach: "Find next empty. Try each digit. If valid → place & recurse. If dead-end → reset & try next.",
+        timeComplexity: "O(9^m) m=empty cells",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/sudoku-solver/",
+        code: `function solveSudoku(board) {
+  function isValid(r,c,ch) {
+    for(let i=0;i<9;i++) {
+      if(board[r][i]===ch||board[i][c]===ch) return false;
+      const br=3*Math.floor(r/3)+Math.floor(i/3);
+      const bc=3*Math.floor(c/3)+i%3;
+      if(board[br][bc]===ch) return false;
+    }
+    return true;
+  }
+  function solve() {
+    for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(board[r][c]==='.') {
+      for(let d=1;d<=9;d++) {
+        const ch=String(d);
+        if(isValid(r,c,ch)){ board[r][c]=ch; if(solve()) return true; board[r][c]='.'; }
+      }
+      return false;
+    }
+    return true;
+  }
+  solve();
+}`,
+      },
+      {
+        id: "generate-parentheses",
+        title: "Generate Parentheses",
+        category: "Backtracking",
+        difficulty: "Medium",
+        trick: "Add '(' if open < n. Add ')' if close < open. Stop when cur.length === 2n.",
+        approach: "Backtrack with open/close counters. Valid state: open<=n, close<=open.",
+        timeComplexity: "O(4ⁿ/√n)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/generate-parentheses/",
+        code: `function generateParenthesis(n) {
+  const res = [];
+  function bt(cur, open, close) {
+    if (cur.length === 2*n) { res.push(cur); return; }
+    if (open < n) bt(cur+'(', open+1, close);
+    if (close < open) bt(cur+')', open, close+1);
+  }
+  bt('', 0, 0);
+  return res;
+}`,
+      },
+    ],
+  },
+  // ── Trie ─────────────────────────────────────────────────────────
+  {
+    id: "trie",
+    name: "Trie",
+    emoji: "🌲",
+    color: "#14b8a6",
+    questions: [
+      {
+        id: "implement-trie",
+        title: "Implement Trie (Prefix Tree)",
+        category: "Trie",
+        difficulty: "Medium",
+        trick: "Each node has children[26] + isEnd flag. insert/search/startsWith all traverse char by char.",
+        approach: "TrieNode with children map. insert: create nodes. search: walk & check isEnd.",
+        timeComplexity: "O(L) per operation",
+        spaceComplexity: "O(L × n)",
+        leetcodeUrl: "https://leetcode.com/problems/implement-trie-prefix-tree/",
+        code: `class TrieNode { constructor() { this.c={}; this.end=false; } }
+class Trie {
+  constructor() { this.root = new TrieNode(); }
+  insert(w) {
+    let n = this.root;
+    for (const c of w) { if (!n.c[c]) n.c[c]=new TrieNode(); n=n.c[c]; }
+    n.end = true;
+  }
+  _walk(w) { let n=this.root; for(const c of w){if(!n.c[c])return null; n=n.c[c];} return n; }
+  search(w) { const n=this._walk(w); return !!n?.end; }
+  startsWith(p) { return !!this._walk(p); }
+}`,
+      },
+      {
+        id: "add-search-word",
+        title: "Add and Search Word (with '.')",
+        category: "Trie",
+        difficulty: "Medium",
+        trick: "Standard Trie + handle '.' by trying all children recursively.",
+        approach: "Insert normally. Search: on '.', recurse all children for rest of pattern.",
+        timeComplexity: "O(L) insert, O(26^L) worst search",
+        spaceComplexity: "O(L × n)",
+        leetcodeUrl: "https://leetcode.com/problems/design-add-and-search-words-data-structure/",
+        code: `class WordDictionary {
+  constructor() { this.root = {}; }
+  addWord(w) {
+    let n = this.root;
+    for (const c of w) { n[c] ??= {}; n = n[c]; }
+    n['#'] = true;
+  }
+  search(w, node = this.root) {
+    for (let i = 0; i < w.length; i++) {
+      const c = w[i];
+      if (c === '.') return Object.keys(node).filter(k=>k!=='#').some(k => this.search(w.slice(i+1), node[k]));
+      if (!node[c]) return false;
+      node = node[c];
+    }
+    return !!node['#'];
+  }
+}`,
+      },
+      {
+        id: "word-search-ii",
+        title: "Word Search II",
+        category: "Trie",
+        difficulty: "Hard",
+        trick: "Build Trie from words. DFS board while walking Trie. Prune when no Trie path.",
+        approach: "Insert all words into Trie. DFS from each cell, follow Trie. Collect at isEnd.",
+        timeComplexity: "O(m × n × 4^L)",
+        spaceComplexity: "O(total word chars)",
+        leetcodeUrl: "https://leetcode.com/problems/word-search-ii/",
+        code: `function findWords(board, words) {
+  const root = {}, res = new Set();
+  for (const w of words) {
+    let n = root;
+    for (const c of w) { n[c] ??= {}; n = n[c]; }
+    n['$'] = w;
+  }
+  const m=board.length, n=board[0].length;
+  function dfs(r,c,node) {
+    if(r<0||r>=m||c<0||c>=n) return;
+    const ch = board[r][c];
+    if(!node[ch]) return;
+    const next = node[ch];
+    if(next['$']) res.add(next['$']);
+    board[r][c]='#';
+    dfs(r+1,c,next); dfs(r-1,c,next); dfs(r,c+1,next); dfs(r,c-1,next);
+    board[r][c]=ch;
+  }
+  for(let r=0;r<m;r++) for(let c=0;c<n;c++) dfs(r,c,root);
+  return [...res];
+}`,
+      },
+      {
+        id: "longest-word-dictionary",
+        title: "Longest Word in Dictionary",
+        category: "Trie",
+        difficulty: "Easy",
+        trick: "Insert all words into Trie. BFS/DFS only along paths where every prefix exists (isEnd=true).",
+        approach: "Sort words. Insert each. During search, only extend nodes marked as end of word.",
+        timeComplexity: "O(Σ word lengths)",
+        spaceComplexity: "O(Σ word lengths)",
+        leetcodeUrl: "https://leetcode.com/problems/longest-word-in-dictionary/",
+        code: `function longestWord(words) {
+  words.sort();
+  const built = new Set(['']);
+  let res = '';
+  for (const w of words) {
+    if (built.has(w.slice(0,-1))) {
+      built.add(w);
+      if (w.length > res.length) res = w;
+    }
+  }
+  return res;
+}`,
+      },
+      {
+        id: "replace-words",
+        title: "Replace Words",
+        category: "Trie",
+        difficulty: "Medium",
+        trick: "Build Trie from roots. For each word, walk Trie until you hit a terminal root → replace.",
+        approach: "Insert all roots. For each word: walk char by char; if isEnd reached, use that prefix.",
+        timeComplexity: "O(Σ roots + Σ words)",
+        spaceComplexity: "O(Σ roots)",
+        leetcodeUrl: "https://leetcode.com/problems/replace-words/",
+        code: `function replaceWords(dictionary, sentence) {
+  const root = {};
+  for (const w of dictionary) {
+    let n = root;
+    for (const c of w) { n[c] ??= {}; n = n[c]; }
+    n['$'] = w;
+  }
+  return sentence.split(' ').map(word => {
+    let n = root;
+    for (const c of word) {
+      if (!n[c]) break;
+      n = n[c];
+      if (n['$']) return n['$'];
+    }
+    return word;
+  }).join(' ');
+}`,
+      },
+    ],
+  },
+  // ── Bit Manipulation ─────────────────────────────────────────────
+  {
+    id: "bit-manipulation",
+    name: "Bit Manipulation",
+    emoji: "⚡",
+    color: "#f59e0b",
+    questions: [
+      {
+        id: "single-number",
+        title: "Single Number",
+        category: "Bit Manipulation",
+        difficulty: "Easy",
+        trick: "XOR cancels pairs: a^a=0, a^0=a. XOR all elements → the unique one remains.",
+        approach: "Reduce with XOR. Pairs cancel, lone number survives.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/single-number/",
+        code: `function singleNumber(nums) {
+  return nums.reduce((acc, n) => acc ^ n, 0);
+}`,
+      },
+      {
+        id: "count-bits",
+        title: "Counting Bits",
+        category: "Bit Manipulation",
+        difficulty: "Easy",
+        trick: "dp[i] = dp[i >> 1] + (i & 1). Right shift removes LSB, LSB is 0 or 1.",
+        approach: "Build dp array: bits[i] = bits[i/2] + i%2 for all i up to n.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/counting-bits/",
+        code: `function countBits(n) {
+  const dp = Array(n + 1).fill(0);
+  for (let i = 1; i <= n; i++) dp[i] = dp[i >> 1] + (i & 1);
+  return dp;
+}`,
+      },
+      {
+        id: "reverse-bits",
+        title: "Reverse Bits",
+        category: "Bit Manipulation",
+        difficulty: "Easy",
+        trick: "Shift result left, take LSB of n (n&1), shift n right. Repeat 32 times.",
+        approach: "Loop 32 times: res = (res<<1)|(n&1), n>>>=1.",
+        timeComplexity: "O(1)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/reverse-bits/",
+        code: `function reverseBits(n) {
+  let res = 0;
+  for (let i = 0; i < 32; i++) {
+    res = (res * 2 + (n & 1)) >>> 0;
+    n >>>= 1;
+  }
+  return res >>> 0;
+}`,
+      },
+      {
+        id: "missing-number",
+        title: "Missing Number",
+        category: "Bit Manipulation",
+        difficulty: "Easy",
+        trick: "XOR [0..n] with all nums. Pairs cancel, missing remains. Or: n*(n+1)/2 - sum.",
+        approach: "XOR index and value. Or Gauss formula: expected - actual sum.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/missing-number/",
+        code: `function missingNumber(nums) {
+  let res = nums.length;
+  for (let i = 0; i < nums.length; i++) res ^= i ^ nums[i];
+  return res;
+}`,
+      },
+      {
+        id: "power-of-two",
+        title: "Power of Two",
+        category: "Bit Manipulation",
+        difficulty: "Easy",
+        trick: "Power of 2 has exactly one bit set. n & (n-1) clears that bit → 0. Also n>0.",
+        approach: "Check n>0 && (n & (n-1)) === 0.",
+        timeComplexity: "O(1)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/power-of-two/",
+        code: `function isPowerOfTwo(n) {
+  return n > 0 && (n & (n - 1)) === 0;
+}`,
+      },
+      {
+        id: "sum-of-two-integers",
+        title: "Sum of Two Integers (No +/-)",
+        category: "Bit Manipulation",
+        difficulty: "Medium",
+        trick: "XOR = sum without carry. AND<<1 = carry. Repeat until no carry.",
+        approach: "While b≠0: carry=(a&b)<<1, a=a^b, b=carry.",
+        timeComplexity: "O(1)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/sum-of-two-integers/",
+        code: `function getSum(a, b) {
+  while (b) {
+    const carry = (a & b) << 1;
+    a = a ^ b;
+    b = carry;
+  }
+  return a;
+}`,
+      },
+    ],
+  },
+  // ── Intervals ────────────────────────────────────────────────────
+  {
+    id: "intervals",
+    name: "Intervals",
+    emoji: "📏",
+    color: "#22c55e",
+    questions: [
+      {
+        id: "merge-intervals",
+        title: "Merge Intervals",
+        category: "Intervals",
+        difficulty: "Medium",
+        trick: "Sort by start. If next.start <= cur.end → merge (extend end). Else push new.",
+        approach: "Sort intervals by start. Iterate merging overlapping ones.",
+        timeComplexity: "O(n log n)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/merge-intervals/",
+        code: `function merge(intervals) {
+  intervals.sort((a,b) => a[0]-b[0]);
+  const res = [intervals[0]];
+  for (const [s,e] of intervals.slice(1)) {
+    const last = res[res.length-1];
+    if (s <= last[1]) last[1] = Math.max(last[1], e);
+    else res.push([s, e]);
+  }
+  return res;
+}`,
+      },
+      {
+        id: "insert-interval",
+        title: "Insert Interval",
+        category: "Intervals",
+        difficulty: "Medium",
+        trick: "Three phases: add all before new interval, merge overlapping, add remaining.",
+        approach: "While end < newStart → push. While start <= newEnd → expand. Push rest.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/insert-interval/",
+        code: `function insert(intervals, [ns, ne]) {
+  const res = [];
+  let i = 0;
+  while (i < intervals.length && intervals[i][1] < ns) res.push(intervals[i++]);
+  while (i < intervals.length && intervals[i][0] <= ne) {
+    ns = Math.min(ns, intervals[i][0]);
+    ne = Math.max(ne, intervals[i++][1]);
+  }
+  res.push([ns, ne]);
+  while (i < intervals.length) res.push(intervals[i++]);
+  return res;
+}`,
+      },
+      {
+        id: "non-overlapping-intervals",
+        title: "Non-Overlapping Intervals",
+        category: "Intervals",
+        difficulty: "Medium",
+        trick: "Sort by end. Greedy: keep interval with earliest end. Remove overlapping ones.",
+        approach: "Sort by end. Track prevEnd. If start < prevEnd → remove (count++), else update prevEnd.",
+        timeComplexity: "O(n log n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/non-overlapping-intervals/",
+        code: `function eraseOverlapIntervals(intervals) {
+  intervals.sort((a,b) => a[1]-b[1]);
+  let count = 0, prevEnd = -Infinity;
+  for (const [s, e] of intervals) {
+    if (s >= prevEnd) prevEnd = e;
+    else count++;
+  }
+  return count;
+}`,
+      },
+      {
+        id: "meeting-rooms-ii",
+        title: "Meeting Rooms II",
+        category: "Intervals",
+        difficulty: "Medium",
+        trick: "Min-heap of end times. Sort by start. If room free (heap.min <= start) reuse it.",
+        approach: "Sort by start. Use min-heap of end times. At each meeting either pop+push or just push.",
+        timeComplexity: "O(n log n)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/meeting-rooms-ii/",
+        code: `// Using sorted arrays (no heap library)
+function minMeetingRooms(intervals) {
+  const starts = intervals.map(i=>i[0]).sort((a,b)=>a-b);
+  const ends = intervals.map(i=>i[1]).sort((a,b)=>a-b);
+  let rooms = 0, ep = 0;
+  for (let i = 0; i < intervals.length; i++) {
+    if (starts[i] < ends[ep]) rooms++;
+    else ep++;
+  }
+  return rooms;
+}`,
+      },
+      {
+        id: "minimum-arrows",
+        title: "Minimum Number of Arrows to Burst Balloons",
+        category: "Intervals",
+        difficulty: "Medium",
+        trick: "Sort by end. Arrow at current end bursts all overlapping. Only move arrow when gap found.",
+        approach: "Sort by end. Track arrowPos = first end. If next start > arrowPos → new arrow.",
+        timeComplexity: "O(n log n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/minimum-number-of-arrows-to-burst-balloons/",
+        code: `function findMinArrowShots(points) {
+  points.sort((a,b) => a[1]-b[1]);
+  let arrows = 1, end = points[0][1];
+  for (const [s,e] of points.slice(1)) {
+    if (s > end) { arrows++; end = e; }
+  }
+  return arrows;
+}`,
+      },
+      {
+        id: "interval-list-intersections",
+        title: "Interval List Intersections",
+        category: "Intervals",
+        difficulty: "Medium",
+        trick: "Two pointers on both lists. Intersection = [max(starts), min(ends)] if valid. Advance list with smaller end.",
+        approach: "i,j pointers. Compute overlap. If valid push. Advance pointer with smaller end.",
+        timeComplexity: "O(m + n)",
+        spaceComplexity: "O(m + n)",
+        leetcodeUrl: "https://leetcode.com/problems/interval-list-intersections/",
+        code: `function intervalIntersection(A, B) {
+  const res = [];
+  let i = 0, j = 0;
+  while (i < A.length && j < B.length) {
+    const lo = Math.max(A[i][0], B[j][0]);
+    const hi = Math.min(A[i][1], B[j][1]);
+    if (lo <= hi) res.push([lo, hi]);
+    A[i][1] < B[j][1] ? i++ : j++;
+  }
+  return res;
+}`,
+      },
+    ],
+  },
+  // ── Greedy ───────────────────────────────────────────────────────
+  {
+    id: "greedy",
+    name: "Greedy",
+    emoji: "💰",
+    color: "#f97316",
+    questions: [
+      {
+        id: "jump-game",
+        title: "Jump Game",
+        category: "Greedy",
+        difficulty: "Medium",
+        trick: "Track max reachable index. If i > maxReach → can't proceed. If maxReach >= n-1 → true.",
+        approach: "Greedily extend maxReach = max(maxReach, i+nums[i]). Stop early if stuck.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/jump-game/",
+        code: `function canJump(nums) {
+  let maxReach = 0;
+  for (let i = 0; i < nums.length; i++) {
+    if (i > maxReach) return false;
+    maxReach = Math.max(maxReach, i + nums[i]);
+  }
+  return true;
+}`,
+      },
+      {
+        id: "jump-game-ii",
+        title: "Jump Game II",
+        category: "Greedy",
+        difficulty: "Medium",
+        trick: "BFS levels: at each 'level' (jump), track farthest reachable. Jump when you hit level end.",
+        approach: "Track curEnd, farthest, jumps. When i===curEnd: jumps++, curEnd=farthest.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/jump-game-ii/",
+        code: `function jump(nums) {
+  let jumps = 0, curEnd = 0, farthest = 0;
+  for (let i = 0; i < nums.length - 1; i++) {
+    farthest = Math.max(farthest, i + nums[i]);
+    if (i === curEnd) { jumps++; curEnd = farthest; }
+  }
+  return jumps;
+}`,
+      },
+      {
+        id: "gas-station",
+        title: "Gas Station",
+        category: "Greedy",
+        difficulty: "Medium",
+        trick: "If total gas >= total cost, solution exists. Start over when tank goes negative.",
+        approach: "Track total and current tank. Reset start index when current < 0.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/gas-station/",
+        code: `function canCompleteCircuit(gas, cost) {
+  let total = 0, tank = 0, start = 0;
+  for (let i = 0; i < gas.length; i++) {
+    total += gas[i] - cost[i];
+    tank += gas[i] - cost[i];
+    if (tank < 0) { start = i + 1; tank = 0; }
+  }
+  return total >= 0 ? start : -1;
+}`,
+      },
+      {
+        id: "task-scheduler",
+        title: "Task Scheduler",
+        category: "Greedy",
+        difficulty: "Medium",
+        trick: "Most frequent task drives the answer. Slots = (maxCount-1)*(n+1) + countOfMaxFreq.",
+        approach: "Count frequencies. Formula: max(tasks.length, (maxFreq-1)*(n+1)+maxFreqCount).",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/task-scheduler/",
+        code: `function leastInterval(tasks, n) {
+  const freq = Array(26).fill(0);
+  for (const t of tasks) freq[t.charCodeAt(0)-65]++;
+  freq.sort((a,b)=>b-a);
+  const maxFreq = freq[0];
+  let maxCount = freq.filter(f => f === maxFreq).length;
+  return Math.max(tasks.length, (maxFreq - 1) * (n + 1) + maxCount);
+}`,
+      },
+      {
+        id: "partition-labels",
+        title: "Partition Labels",
+        category: "Greedy",
+        difficulty: "Medium",
+        trick: "Track last index of each char. Extend current partition to max last seen. When end reached → new partition.",
+        approach: "Map each char to its last index. Scan: extend end = max(end, last[c]). When i===end push size.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/partition-labels/",
+        code: `function partitionLabels(s) {
+  const last = {};
+  for (let i = 0; i < s.length; i++) last[s[i]] = i;
+  const res = [];
+  let start = 0, end = 0;
+  for (let i = 0; i < s.length; i++) {
+    end = Math.max(end, last[s[i]]);
+    if (i === end) { res.push(end - start + 1); start = i + 1; }
+  }
+  return res;
+}`,
+      },
+      {
+        id: "candy",
+        title: "Candy",
+        category: "Greedy",
+        difficulty: "Hard",
+        trick: "Two passes: L→R give +1 if higher than left. R→L take max of right+1 if higher.",
+        approach: "Init all 1s. Left pass: if rating[i]>rating[i-1] candy[i]=candy[i-1]+1. Right pass same.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(n)",
+        leetcodeUrl: "https://leetcode.com/problems/candy/",
+        code: `function candy(ratings) {
+  const n = ratings.length;
+  const c = Array(n).fill(1);
+  for (let i=1;i<n;i++) if(ratings[i]>ratings[i-1]) c[i]=c[i-1]+1;
+  for (let i=n-2;i>=0;i--) if(ratings[i]>ratings[i+1]) c[i]=Math.max(c[i],c[i+1]+1);
+  return c.reduce((s,v)=>s+v,0);
+}`,
+      },
+      {
+        id: "majority-element",
+        title: "Majority Element (Boyer-Moore)",
+        category: "Greedy",
+        difficulty: "Easy",
+        trick: "Boyer-Moore Voting: candidate cancels out with opponents. Majority always survives.",
+        approach: "Track candidate and count. If count===0 set new candidate. Increment if same, decrement if diff.",
+        timeComplexity: "O(n)",
+        spaceComplexity: "O(1)",
+        leetcodeUrl: "https://leetcode.com/problems/majority-element/",
+        code: `function majorityElement(nums) {
+  let candidate = nums[0], count = 1;
+  for (let i = 1; i < nums.length; i++) {
+    if (count === 0) { candidate = nums[i]; count = 1; }
+    else count += nums[i] === candidate ? 1 : -1;
+  }
+  return candidate;
+}`,
+      },
+    ],
+  },
 ]; // end DSA_CATEGORIES

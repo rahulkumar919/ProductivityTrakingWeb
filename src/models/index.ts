@@ -6,3 +6,4 @@ export { Routine } from "./Routine";
 export { ActivityLog } from "./ActivityLog";
 export { TimeSession } from "./TimeSession";
 export { Analytics } from "./Analytics";
+export { Notebook } from "./Notebook";

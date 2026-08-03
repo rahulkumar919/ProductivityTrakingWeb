@@ -6,7 +6,7 @@ export default function DSAPage() {
         <>
             <PageHeader
                 title="DSA Revision"
-                description="154 must-know problems — tricks, patterns, clean code. Track your progress."
+                description="154 must-know problems across 17 topics — tricks, patterns, clean code. Track your progress."
             />
             <DSARevision />
         </>

@@ -15,4 +15,8 @@ export const env = {
   smtpPass: optionalEnv("SMTP_PASS"),
   reminderEmailTo: optionalEnv("REMINDER_EMAIL_TO"),
   appUrl: optionalEnv("NEXT_PUBLIC_APP_URL") ?? "http://localhost:3000",
+  // Cloudinary
+  cloudinaryCloudName: optionalEnv("CLOUDINARY_CLOUD_NAME"),
+  cloudinaryApiKey: optionalEnv("CLOUDINARY_API_KEY"),
+  cloudinaryApiSecret: optionalEnv("CLOUDINARY_API_SECRET"),
 };

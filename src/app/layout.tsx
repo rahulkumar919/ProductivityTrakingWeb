@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { PwaRegister } from "@/components/providers/pwa-register";
+import { SessionProvider } from "@/components/providers/session-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,8 +33,10 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col">
         <ThemeProvider>
-          <PwaRegister />
-          {children}
+          <SessionProvider>
+            <PwaRegister />
+            {children}
+          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>
