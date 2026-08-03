@@ -7,3 +7,4 @@ export { ActivityLog } from "./ActivityLog";
 export { TimeSession } from "./TimeSession";
 export { Analytics } from "./Analytics";
 export { Notebook } from "./Notebook";
+export { StudyPdf } from "./StudyPdf";

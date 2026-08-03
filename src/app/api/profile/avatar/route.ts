@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { auth } from "@/lib/next-auth";
 import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
 import { env } from "@/lib/env";
+
+async function resolveUserId(): Promise<string | null> {
+    const jwtUser = await getCurrentUser();
+    if (jwtUser?.userId) return jwtUser.userId;
+    const session = await auth();
+    const u = session?.user as { id?: string } | undefined;
+    return u?.id ?? null;
+}
 
 export async function POST(request: Request) {
     // If Cloudinary is not configured, return a clear error
@@ -14,8 +23,8 @@ export async function POST(request: Request) {
         );
     }
 
-    const user = await getCurrentUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const userId = await resolveUserId();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     let body: { image?: string };
     try {
@@ -29,7 +38,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "image (base64 data URL) is required" }, { status: 400 });
     }
 
-    // Validate it's actually an image data URL
     if (!image.startsWith("data:image/")) {
         return NextResponse.json({ error: "image must be a base64 data URL (data:image/...)" }, { status: 400 });
     }
@@ -37,21 +45,17 @@ export async function POST(request: Request) {
     await connectToDatabase();
 
     // Delete old avatar from Cloudinary if it exists
-    const existing = await User.findById(user.userId).select("avatarPublicId");
+    const existing = await User.findById(userId).select("avatarPublicId");
     if (existing?.avatarPublicId) {
         try {
             await deleteFromCloudinary(existing.avatarPublicId);
-        } catch {
-            // Non-fatal: old image delete failed, continue with upload
-        }
+        } catch { /* non-fatal */ }
     }
 
-    // Upload new avatar
     const { publicId, url } = await uploadToCloudinary(image, "devtrack/avatars");
 
-    // Save to DB
     await User.updateOne(
-        { _id: user.userId },
+        { _id: userId },
         { avatarUrl: url, avatarPublicId: publicId }
     );
 

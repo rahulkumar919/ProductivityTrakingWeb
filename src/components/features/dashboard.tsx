@@ -273,14 +273,56 @@ function GoalsPanel({ goals }: { goals: Goal[] }) {
 }
 
 /* ─── Email reminder modal ─────────────────────────────────────── */
-function ReminderModal({ pendingCount, onClose }: { pendingCount: number; onClose: () => void }) {
-  const [email, setEmail] = useState("");
+/* ─── Live IST Clock ───────────────────────────────────────────── */
+function LiveClock() {
+  const [time, setTime] = useState("");
+  const [date, setDate] = useState("");
+
+  useEffect(() => {
+    function tick() {
+      const now = new Date();
+      setTime(now.toLocaleTimeString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
+      }));
+      setDate(now.toLocaleDateString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        weekday: "long", day: "numeric", month: "long", year: "numeric",
+      }));
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="db-clock">
+      <div className="db-clock-icon">🕐</div>
+      <div>
+        <p className="db-clock-time">{time}</p>
+        <p className="db-clock-label">IST · India</p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Auto Reminder Modal ──────────────────────────────────────── */
+function ReminderModal({ pendingCount, userEmail, onClose }: {
+  pendingCount: number;
+  userEmail: string;
+  onClose: () => void;
+}) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
 
-  async function send() {
-    if (!email.trim()) { setError("Please enter your email."); return; }
+  // Auto-send immediately on mount if email is known
+  useEffect(() => {
+    if (userEmail) autoSend(userEmail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function autoSend(email: string) {
     setSending(true); setError("");
     try {
       const res = await fetch("/api/reminder", {
@@ -288,10 +330,13 @@ function ReminderModal({ pendingCount, onClose }: { pendingCount: number; onClos
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, pendingCount }),
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "Failed");
+      }
       setSent(true);
-    } catch {
-      setError("Could not send email. Check your mail settings.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not send email.");
     } finally { setSending(false); }
   }
 
@@ -301,41 +346,48 @@ function ReminderModal({ pendingCount, onClose }: { pendingCount: number; onClos
       <div className="rounded-3xl p-8 max-w-sm w-full mx-4 space-y-5"
         style={{ background: "var(--card)", border: "1px solid var(--border)", boxShadow: "0 24px 64px rgba(0,0,0,0.2)", animation: "dbFade .3s ease" }}
         onClick={e => e.stopPropagation()}>
+
         <div className="flex size-14 items-center justify-center rounded-2xl mx-auto"
-          style={{ background: "rgba(239,68,68,0.1)" }}>
-          <span className="text-3xl">📬</span>
+          style={{ background: sending ? "rgba(245,158,11,0.1)" : sent ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)" }}>
+          <span className="text-3xl">{sending ? "⏳" : sent ? "✅" : "📬"}</span>
         </div>
-        <div className="text-center">
-          <h3 className="text-lg font-black">Send Reminder Email</h3>
-          <p className="text-sm mt-1" style={{ color: "var(--muted-foreground)" }}>
-            You have <strong>{pendingCount}</strong> pending task{pendingCount !== 1 ? "s" : ""}. Send yourself a reminder.
-          </p>
-        </div>
-        {!sent ? (
-          <>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
-              style={{ background: "var(--muted)", borderColor: "var(--border)", color: "var(--foreground)" }}
-              onKeyDown={e => e.key === "Enter" && send()} />
-            {error && <p className="text-xs text-center" style={{ color: "#ef4444" }}>{error}</p>}
-            <div className="flex gap-3">
-              <button onClick={onClose} className="flex-1 rounded-2xl py-3 text-sm font-bold"
-                style={{ background: "var(--muted)", color: "var(--foreground)" }}>Cancel</button>
-              <button onClick={send} disabled={sending}
-                className="flex-1 rounded-2xl py-3 text-sm font-black"
-                style={{ background: "linear-gradient(135deg,#ef4444,#dc2626)", color: "#fff" }}>
-                {sending ? "Sending…" : "Send Now"}
-              </button>
-            </div>
-          </>
-        ) : (
+
+        {sending && (
+          <div className="text-center space-y-2">
+            <p className="font-black text-lg">Sending reminder…</p>
+            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+              Sending to <strong>{userEmail}</strong>
+            </p>
+          </div>
+        )}
+
+        {sent && (
           <div className="text-center space-y-3">
-            <p className="text-4xl">✅</p>
-            <p className="font-black">Reminder sent!</p>
-            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>Check your inbox at <strong>{email}</strong></p>
+            <p className="font-black text-lg">Reminder sent! 🎉</p>
+            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+              Email sent to <strong>{userEmail}</strong>
+            </p>
+            <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+              You have <strong>{pendingCount}</strong> pending task{pendingCount !== 1 ? "s" : ""}. Go crush them!
+            </p>
+            <button onClick={onClose} className="w-full rounded-2xl py-3 text-sm font-bold mt-2"
+              style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
+              Got it!
+            </button>
+          </div>
+        )}
+
+        {error && (
+          <div className="text-center space-y-3">
+            <p className="font-black text-lg">Could not send</p>
+            <p className="text-sm" style={{ color: "#ef4444" }}>{error}</p>
+            <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+              Check your SMTP settings in .env.local
+            </p>
             <button onClick={onClose} className="w-full rounded-2xl py-3 text-sm font-bold"
-              style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>Done</button>
+              style={{ background: "var(--muted)", color: "var(--foreground)" }}>
+              Close
+            </button>
           </div>
         )}
       </div>
@@ -351,6 +403,7 @@ export function Dashboard() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [dsaProgress, setDsaProgress] = useState<Record<string, string>>({});
   const [userName, setUserName] = useState("there");
+  const [userEmail, setUserEmail] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
   // Stable "now" captured once on mount — avoids impure Date.now() in render
@@ -361,8 +414,11 @@ export function Dashboard() {
     setSessions(load("devtrack_sessions"));
     setGoals(load("devtrack_goals"));
     setDsaProgress(loadObj<Record<string, string>>("devtrack_dsa_progress") ?? {});
-    // Try to get name from profile API
-    fetch("/api/profile").then(r => r.json()).then(d => { if (d?.name) setUserName(d.name.split(" ")[0]); }).catch(() => { });
+    // Try to get name + email from profile API
+    fetch("/api/profile").then(r => r.json()).then(d => {
+      if (d?.name) setUserName(d.name.split(" ")[0]);
+      if (d?.email) setUserEmail(d.email);
+    }).catch(() => { });
     setHydrated(true);
   }, []);
 
@@ -412,7 +468,7 @@ export function Dashboard() {
 
   return (
     <>
-      {showReminder && <ReminderModal pendingCount={pending} onClose={() => setShowReminder(false)} />}
+      {showReminder && <ReminderModal pendingCount={pending} userEmail={userEmail} onClose={() => setShowReminder(false)} />}
 
       <div className="space-y-5">
 
@@ -424,6 +480,7 @@ export function Dashboard() {
             <p className="db-hero-sub">Here&apos;s what&apos;s happening with your productivity today.</p>
           </div>
           <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            <LiveClock />
             {overdueTasks.length > 0 && (
               <button onClick={() => setShowReminder(true)}
                 className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-black transition-all hover:opacity-90 animate-pulse"
@@ -588,10 +645,14 @@ export function Dashboard() {
 
       <style>{`
         /* Hero */
+        .db-clock { display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.9rem; border-radius:14px; background:rgba(22,97,79,0.08); border:1.5px solid rgba(22,97,79,0.18); }
+        .db-clock-icon { font-size:1.1rem; line-height:1; }
+        .db-clock-time { font-size:1rem; font-weight:900; color:var(--foreground); line-height:1.1; letter-spacing:0.02em; }
+        .db-clock-label { font-size:0.65rem; font-weight:700; color:var(--primary); text-transform:uppercase; letter-spacing:0.06em; margin-top:1px; }
+
         .db-hero {
           display: flex; align-items: flex-start; justify-content: space-between;
-          flex-wrap: wrap; gap: 16px;
-          padding: 24px 28px; border-radius: 28px;
+          flex-wrap: wrap; gap: 16px;          padding: 24px 28px; border-radius: 28px;
           background: linear-gradient(135deg, var(--card) 0%, color-mix(in srgb, var(--primary) 6%, var(--card)) 100%);
           border: 1px solid var(--border);
           box-shadow: 0 4px 24px rgba(0,0,0,0.06);
