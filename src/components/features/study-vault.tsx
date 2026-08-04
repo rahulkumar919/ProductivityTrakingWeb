@@ -199,14 +199,9 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
     const [showNotes, setShowNotes] = useState(false);
     const [noteText, setNoteText] = useState("");
     const [addingNote, setAddingNote] = useState(false);
-    const [loadError, setLoadError] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [proxyOk, setProxyOk] = useState<boolean | null>(null);
-    const iframeRef = useRef<HTMLIFrameElement>(null);
-    // Always use our proxy URL — bypasses all Cloudinary CORS / X-Frame-Options
     const proxyUrl = `/api/study-pdfs/${doc._id}/proxy`;
-    // Append #page= for browsers that support PDF fragment navigation
-    const iframeSrc = proxyOk === false ? "" : `${proxyUrl}#page=${page}&zoom=${zoom}`;
+    const iframeSrc = `${proxyUrl}#page=${page}`;
 
     useEffect(() => {
         const h = (e: KeyboardEvent) => {
@@ -222,34 +217,8 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
 
     useEffect(() => { onProgress(doc._id, page); }, [page, doc._id, onProgress]);
 
-    // Reload iframe when page changes (fragment navigation isn't always live)
-    useEffect(() => {
-        setLoading(true);
-        setLoadError(false);
-    }, [page]);
-
-    // Pre-flight check: verify proxy returns actual PDF bytes before loading iframe
-    useEffect(() => {
-        setProxyOk(null);
-        setLoading(true);
-        setLoadError(false);
-        fetch(`/api/study-pdfs/${doc._id}/proxy`, { method: "HEAD" })
-            .then(r => {
-                if (r.ok && r.headers.get("content-type")?.includes("pdf")) {
-                    setProxyOk(true);
-                } else {
-                    // HEAD might not work — try GET with range to check
-                    return fetch(`/api/study-pdfs/${doc._id}/proxy`, {
-                        headers: { Range: "bytes=0-3" },
-                    }).then(r2 => {
-                        setProxyOk(r2.ok);
-                        if (!r2.ok) { setLoadError(true); setLoading(false); }
-                    });
-                }
-            })
-            .catch(() => { setProxyOk(false); setLoadError(true); setLoading(false); });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [doc._id]);
+    // Reset loading state on page change
+    useEffect(() => { setLoading(true); }, [page]);
 
     const pageNotes = doc.notes.filter(n => n.page === page);
     const pct = Math.round((page / doc.totalPages) * 100);
@@ -371,40 +340,7 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                         </div>
                     )}
 
-                    {/* Error state */}
-                    {loadError && (
-                        <div className="absolute inset-0 flex items-center justify-center z-10"
-                            style={{ background: "rgba(10,15,13,0.9)" }}>
-                            <div className="flex flex-col items-center gap-4 text-center max-w-sm px-6">
-                                <div className="flex size-16 items-center justify-center rounded-2xl"
-                                    style={{ background: "rgba(239,68,68,0.15)" }}>
-                                    <FileText size={28} style={{ color: "#ef4444" }} />
-                                </div>
-                                <div>
-                                    <p className="font-black text-white text-base">Could not load PDF</p>
-                                    <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>
-                                        There was a problem loading this file from storage.
-                                    </p>
-                                </div>
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => { setLoadError(false); setProxyOk(null); setLoading(true); }}
-                                        className="rounded-2xl px-5 py-2.5 text-sm font-black"
-                                        style={{ background: "rgba(255,255,255,0.1)", color: "#fff" }}>
-                                        Retry
-                                    </button>
-                                    <a
-                                        href={`/api/study-pdfs/${doc._id}/proxy`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="rounded-2xl px-5 py-2.5 text-sm font-black"
-                                        style={{ background: doc.color, color: "#fff" }}>
-                                        Open in New Tab
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {/* error handled by proxy — iframe shows native PDF error if needed */}
 
                     {/* The PDF iframe — uses our proxy to bypass Cloudinary CORS */}
                     <div style={{
@@ -415,12 +351,10 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                         maxWidth: fullscreen ? "none" : 960,
                     }}>
                         <iframe
-                            ref={iframeRef}
                             key={`${doc._id}-${page}`}
                             src={iframeSrc}
                             title={doc.title}
                             onLoad={() => setLoading(false)}
-                            onError={() => { setLoading(false); setLoadError(true); }}
                             style={{
                                 width: "100%",
                                 height: fullscreen ? "100vh" : "calc(100vh - 130px)",
