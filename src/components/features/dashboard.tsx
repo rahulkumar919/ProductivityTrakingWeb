@@ -317,11 +317,6 @@ function ReminderModal({ pendingCount, userEmail, onClose }: {
   const [error, setError] = useState("");
 
   // Auto-send immediately on mount if email is known
-  useEffect(() => {
-    if (userEmail) autoSend(userEmail);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   async function autoSend(email: string) {
     setSending(true); setError("");
     try {
@@ -339,6 +334,11 @@ function ReminderModal({ pendingCount, userEmail, onClose }: {
       setError(e instanceof Error ? e.message : "Could not send email.");
     } finally { setSending(false); }
   }
+
+  useEffect(() => {
+    if (userEmail) autoSend(userEmail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center"

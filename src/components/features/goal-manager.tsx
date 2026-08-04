@@ -180,8 +180,6 @@ export function GoalManager() {
   const [hydrated, setHydrated] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [tab, setTab] = useState<"All Goals" | "Daily" | "Weekly" | "Monthly" | "Yearly">("All Goals");
-  const nowMs = useMemo(() => Date.now(), []);
-
   useEffect(() => { setGoals(load()); setHydrated(true); }, []);
 
   const update = useCallback((fn: (p: GoalExt[]) => GoalExt[]) => {

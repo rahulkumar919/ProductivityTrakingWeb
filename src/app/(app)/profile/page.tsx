@@ -28,6 +28,17 @@ function fmt(m: number) {
   return h > 0 ? `${h}h${mn > 0 ? ` ${mn}m` : ""}` : `${mn}m`;
 }
 
+/* ─── static fallback activities (no Date.now() in render) ─────── */
+const _NOW = new Date("2026-08-04T12:00:00Z").getTime();
+const FALLBACK_ACTIVITIES = [
+  { description: "Completed 5 DSA problems", type: "Coding", createdAt: new Date(_NOW).toISOString() },
+  { description: "Gym workout completed", type: "Health", createdAt: new Date(_NOW - 3600000).toISOString() },
+  { description: "Read 20 pages of system design", type: "Learning", createdAt: new Date(_NOW - 7200000).toISOString() },
+  { description: "Focus session: 60 minutes", type: "Focus", createdAt: new Date(_NOW - 86400000).toISOString() },
+  { description: "Solved Array problems", type: "Coding", createdAt: new Date(_NOW - 172800000).toISOString() },
+  { description: "Morning meditation", type: "Mindset", createdAt: new Date(_NOW - 259200000).toISOString() },
+];
+
 /* ─── streak calendar ──────────────────────────────────────────── */
 function StreakCalendar() {
   const [month] = useState(new Date());
@@ -455,14 +466,7 @@ export default function ProfilePage() {
             <div className="pf-panel">
               <div className="pf-panel-hd"><p className="pf-panel-title">Activity Timeline</p><button className="pf-link">View All</button></div>
               <div className="pf-timeline-grid">
-                {(activities.length ? activities.slice(0, 6) : [
-                  { description: "Completed 5 DSA problems", type: "Coding", createdAt: new Date().toISOString() },
-                  { description: "Gym workout completed", type: "Health", createdAt: new Date(Date.now() - 3600000).toISOString() },
-                  { description: "Read 20 pages of system design", type: "Learning", createdAt: new Date(Date.now() - 7200000).toISOString() },
-                  { description: "Focus session: 60 minutes", type: "Focus", createdAt: new Date(Date.now() - 86400000).toISOString() },
-                  { description: "Solved Array problems", type: "Coding", createdAt: new Date(Date.now() - 172800000).toISOString() },
-                  { description: "Morning meditation", type: "Mindset", createdAt: new Date(Date.now() - 259200000).toISOString() },
-                ]).map((a, i) => (
+                {(activities.length ? activities.slice(0, 6) : FALLBACK_ACTIVITIES).map((a, i) => (
                   <div key={i} className="pf-tl-item">
                     <div className="pf-tl-dot" style={{ background: CAT_COLORS[a.type] ?? "var(--primary)" }} />
                     <div className="pf-tl-body">

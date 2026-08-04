@@ -12,6 +12,9 @@ import {
 } from "recharts";
 import type { Category, Priority, Task, TaskStatus } from "@/types";
 
+/* ─── module-level timestamp (avoids impure Date.now() in render) ── */
+const MODULE_NOW = Date.now();
+
 /* ─── storage ──────────────────────────────────────────────────── */
 const STORAGE_KEY = "devtrack_tasks";
 const ACTIVITY_KEY = "devtrack_activities";
@@ -207,8 +210,6 @@ export function TaskBoard() {
   const [prioFilter, setPrioFilter] = useState("All Priorities");
   const [showCatDD, setShowCatDD] = useState(false);
   const [showPrioDD, setShowPrioDD] = useState(false);
-  const nowMs = useMemo(() => Date.now(), []);
-
   useEffect(() => { setTasks(loadTasks()); setHydrated(true); }, []);
 
   const update = useCallback((fn: (prev: Task[]) => Task[]) => {
@@ -234,8 +235,8 @@ export function TaskBoard() {
     if (t) appendActivity("Task Deleted", `Deleted: ${t.title}`);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const today = useMemo(() => new Date(MODULE_NOW).toISOString().slice(0, 10), []);
+  const tomorrow = useMemo(() => new Date(MODULE_NOW + 86400000).toISOString().slice(0, 10), []);
 
   const filtered = useMemo(() => {
     return tasks.filter(t => {
@@ -373,7 +374,7 @@ export function TaskBoard() {
                 )}
                 {tomorrowTasks.length > 0 && (
                   <div className="tb-group">
-                    <p className="tb-group-label">Tomorrow · {new Date(Date.now() + 86400000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+                    <p className="tb-group-label">Tomorrow · {new Date(MODULE_NOW + 86400000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
                     {tomorrowTasks.map(t => <TaskRow key={t.id} task={t} onStatus={onStatus} onDelete={onDelete} />)}
                   </div>
                 )}
@@ -440,7 +441,7 @@ export function TaskBoard() {
             </div>
             {upcoming.length === 0 ? <p className="tb-empty-sm">No upcoming tasks</p> : upcoming.map(t => {
               const d = new Date(t.deadline);
-              const daysLeft = Math.ceil((d.getTime() - nowMs) / 86400000);
+              const daysLeft = Math.ceil((d.getTime() - MODULE_NOW) / 86400000);
               return (
                 <div key={t.id} className="tb-deadline-row">
                   <div className="tb-deadline-icon" style={{ background: `${PRIORITY_COLOR2[t.priority]}18`, color: PRIORITY_COLOR2[t.priority] }}>

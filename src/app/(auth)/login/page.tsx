@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Eye, EyeOff, ArrowRight, Loader2, Shield, Smartphone, Lock } from "lucide-react";
@@ -85,9 +85,9 @@ const FEATURES = [
 ];
 
 /* ══════════════════════════════════════════════════════════════
-   MAIN COMPONENT
+   INNER COMPONENT (needs useSearchParams → must be in Suspense)
 ══════════════════════════════════════════════════════════════ */
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -368,5 +368,13 @@ export default function LoginPage() {
         .lg-trust-sub{font-size:.7rem;color:#2e4d3e;margin:.1rem 0 0;}
       `}</style>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
