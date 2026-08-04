@@ -201,11 +201,12 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
     const [addingNote, setAddingNote] = useState(false);
     const [loadError, setLoadError] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [proxyOk, setProxyOk] = useState<boolean | null>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     // Always use our proxy URL — bypasses all Cloudinary CORS / X-Frame-Options
     const proxyUrl = `/api/study-pdfs/${doc._id}/proxy`;
     // Append #page= for browsers that support PDF fragment navigation
-    const iframeSrc = `${proxyUrl}#page=${page}&zoom=${zoom}`;
+    const iframeSrc = proxyOk === false ? "" : `${proxyUrl}#page=${page}&zoom=${zoom}`;
 
     useEffect(() => {
         const h = (e: KeyboardEvent) => {
@@ -226,6 +227,29 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
         setLoading(true);
         setLoadError(false);
     }, [page]);
+
+    // Pre-flight check: verify proxy returns actual PDF bytes before loading iframe
+    useEffect(() => {
+        setProxyOk(null);
+        setLoading(true);
+        setLoadError(false);
+        fetch(`/api/study-pdfs/${doc._id}/proxy`, { method: "HEAD" })
+            .then(r => {
+                if (r.ok && r.headers.get("content-type")?.includes("pdf")) {
+                    setProxyOk(true);
+                } else {
+                    // HEAD might not work — try GET with range to check
+                    return fetch(`/api/study-pdfs/${doc._id}/proxy`, {
+                        headers: { Range: "bytes=0-3" },
+                    }).then(r2 => {
+                        setProxyOk(r2.ok);
+                        if (!r2.ok) { setLoadError(true); setLoading(false); }
+                    });
+                }
+            })
+            .catch(() => { setProxyOk(false); setLoadError(true); setLoading(false); });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [doc._id]);
 
     const pageNotes = doc.notes.filter(n => n.page === page);
     const pct = Math.round((page / doc.totalPages) * 100);
@@ -359,15 +383,25 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                                 <div>
                                     <p className="font-black text-white text-base">Could not load PDF</p>
                                     <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>
-                                        The file may have been removed or there was a connection error.
+                                        There was a problem loading this file from storage.
                                     </p>
                                 </div>
-                                <button
-                                    onClick={() => { setLoadError(false); setLoading(true); }}
-                                    className="rounded-2xl px-6 py-2.5 text-sm font-black"
-                                    style={{ background: doc.color, color: "#fff" }}>
-                                    Try Again
-                                </button>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => { setLoadError(false); setProxyOk(null); setLoading(true); }}
+                                        className="rounded-2xl px-5 py-2.5 text-sm font-black"
+                                        style={{ background: "rgba(255,255,255,0.1)", color: "#fff" }}>
+                                        Retry
+                                    </button>
+                                    <a
+                                        href={`/api/study-pdfs/${doc._id}/proxy`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="rounded-2xl px-5 py-2.5 text-sm font-black"
+                                        style={{ background: doc.color, color: "#fff" }}>
+                                        Open in New Tab
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     )}
