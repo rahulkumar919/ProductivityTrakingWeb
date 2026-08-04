@@ -199,20 +199,33 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
     const [showNotes, setShowNotes] = useState(false);
     const [noteText, setNoteText] = useState("");
     const [addingNote, setAddingNote] = useState(false);
-    // Use cached base64 for display (works without CORS issues, exactly like original)
-    const [pdfSrc, setPdfSrc] = useState<string>(() => getCachedPdf(doc._id) ?? doc.pdfUrl);
+    const [loadError, setLoadError] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+    // Always use our proxy URL — bypasses all Cloudinary CORS / X-Frame-Options
+    const proxyUrl = `/api/study-pdfs/${doc._id}/proxy`;
+    // Append #page= for browsers that support PDF fragment navigation
+    const iframeSrc = `${proxyUrl}#page=${page}&zoom=${zoom}`;
 
     useEffect(() => {
         const h = (e: KeyboardEvent) => {
             if (e.key === "Escape" && !addingNote) onClose();
             if (e.key === "ArrowRight") setPage(p => Math.min(doc.totalPages, p + 1));
             if (e.key === "ArrowLeft") setPage(p => Math.max(1, p - 1));
+            if (e.key === "+" || e.key === "=") setZoom(z => Math.min(200, z + 10));
+            if (e.key === "-") setZoom(z => Math.max(50, z - 10));
         };
         window.addEventListener("keydown", h);
         return () => window.removeEventListener("keydown", h);
     }, [doc.totalPages, onClose, addingNote]);
 
     useEffect(() => { onProgress(doc._id, page); }, [page, doc._id, onProgress]);
+
+    // Reload iframe when page changes (fragment navigation isn't always live)
+    useEffect(() => {
+        setLoading(true);
+        setLoadError(false);
+    }, [page]);
 
     const pageNotes = doc.notes.filter(n => n.page === page);
     const pct = Math.round((page / doc.totalPages) * 100);
@@ -226,151 +239,303 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
 
     return (
         <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0f0d" }}>
-            {/* top bar */}
-            <div className="flex items-center gap-3 px-5 py-3 border-b shrink-0"
-                style={{ borderColor: "rgba(255,255,255,0.08)", background: "#0f1812" }}>
+            {/* ── Top Bar ── */}
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0"
+                style={{ borderColor: "rgba(255,255,255,0.08)", background: "#0d1610" }}>
+                {/* Title + progress */}
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="flex size-9 items-center justify-center rounded-xl shrink-0" style={{ background: `${doc.color}20` }}>
-                        <FileText size={16} style={{ color: doc.color }} />
+                    <div className="flex size-8 items-center justify-center rounded-xl shrink-0" style={{ background: `${doc.color}22` }}>
+                        <FileText size={15} style={{ color: doc.color }} />
                     </div>
-                    <div className="min-w-0">
-                        <p className="font-black text-sm text-white truncate">{doc.title}</p>
+                    <div className="min-w-0 hidden sm:block">
+                        <p className="font-black text-sm text-white truncate leading-tight">{doc.title}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
-                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: doc.color }} />
+                            <div className="w-20 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
+                                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: doc.color }} />
                             </div>
-                            <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.45)" }}>{pct}% read</span>
+                            <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{pct}% read</span>
                         </div>
                     </div>
                 </div>
 
-                {/* page nav */}
-                <div className="flex items-center gap-2">
+                {/* Page navigation */}
+                <div className="flex items-center gap-1.5">
                     <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                        className="flex size-9 items-center justify-center rounded-xl hover:bg-white/10 disabled:opacity-30 transition-all" style={{ color: "#fff" }}>
-                        <ChevronLeft size={18} />
+                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-30 transition-all"
+                        style={{ color: "#fff" }}>
+                        <ChevronLeft size={16} />
                     </button>
-                    <div className="flex items-center gap-1.5 rounded-xl px-3 py-1.5" style={{ background: "rgba(255,255,255,0.07)" }}>
-                        <input type="number" min={1} max={doc.totalPages} value={page}
-                            onChange={e => setPage(Math.max(1, Math.min(doc.totalPages, Number(e.target.value))))}
-                            className="w-10 bg-transparent text-center text-sm font-black text-white outline-none" />
-                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>/ {doc.totalPages}</span>
+                    <div className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm"
+                        style={{ background: "rgba(255,255,255,0.08)" }}>
+                        <input
+                            type="number" min={1} max={doc.totalPages} value={page}
+                            onChange={e => {
+                                const v = Math.max(1, Math.min(doc.totalPages, Number(e.target.value)));
+                                if (!isNaN(v)) setPage(v);
+                            }}
+                            className="w-9 bg-transparent text-center font-black text-white outline-none"
+                            style={{ fontSize: "0.85rem" }}
+                        />
+                        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem" }}>/ {doc.totalPages}</span>
                     </div>
                     <button onClick={() => setPage(p => Math.min(doc.totalPages, p + 1))} disabled={page >= doc.totalPages}
-                        className="flex size-9 items-center justify-center rounded-xl hover:bg-white/10 disabled:opacity-30 transition-all" style={{ color: "#fff" }}>
-                        <ChevronRight size={18} />
+                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-30 transition-all"
+                        style={{ color: "#fff" }}>
+                        <ChevronRight size={16} />
                     </button>
                 </div>
 
-                {/* zoom */}
-                <div className="hidden sm:flex items-center gap-2">
+                {/* Zoom */}
+                <div className="hidden md:flex items-center gap-1.5 rounded-lg px-2 py-1" style={{ background: "rgba(255,255,255,0.06)" }}>
                     <button onClick={() => setZoom(z => Math.max(50, z - 10))}
-                        className="flex size-9 items-center justify-center rounded-xl hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
-                        <ZoomOut size={16} />
+                        className="flex size-7 items-center justify-center rounded hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
+                        <ZoomOut size={14} />
                     </button>
-                    <span className="text-xs font-bold w-10 text-center" style={{ color: "rgba(255,255,255,0.6)" }}>{zoom}%</span>
+                    <button onClick={() => setZoom(100)}
+                        className="text-xs font-bold w-10 text-center hover:text-white transition-colors"
+                        style={{ color: "rgba(255,255,255,0.6)" }}>{zoom}%</button>
                     <button onClick={() => setZoom(z => Math.min(200, z + 10))}
-                        className="flex size-9 items-center justify-center rounded-xl hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
-                        <ZoomIn size={16} />
+                        className="flex size-7 items-center justify-center rounded hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
+                        <ZoomIn size={14} />
                     </button>
                 </div>
 
+                {/* Notes toggle */}
                 <button onClick={() => setShowNotes(v => !v)}
-                    className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-all"
-                    style={{ background: showNotes ? `${doc.color}25` : "rgba(255,255,255,0.07)", color: showNotes ? doc.color : "#fff", border: `1.5px solid ${showNotes ? doc.color + "40" : "transparent"}` }}>
-                    <StickyNote size={13} /> Notes {doc.notes.length > 0 && `(${doc.notes.length})`}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-black transition-all"
+                    style={{
+                        background: showNotes ? `${doc.color}22` : "rgba(255,255,255,0.07)",
+                        color: showNotes ? doc.color : "rgba(255,255,255,0.7)",
+                        border: `1.5px solid ${showNotes ? doc.color + "50" : "transparent"}`,
+                    }}>
+                    <StickyNote size={13} />
+                    <span className="hidden sm:inline">Notes</span>
+                    {doc.notes.length > 0 && (
+                        <span className="rounded-full px-1.5 py-0.5 text-xs font-black" style={{ background: doc.color, color: "#fff", fontSize: "0.65rem" }}>
+                            {doc.notes.length}
+                        </span>
+                    )}
                 </button>
+
+                {/* Fullscreen */}
                 <button onClick={() => setFullscreen(v => !v)}
-                    className="flex size-9 items-center justify-center rounded-xl hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
-                    {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                    className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
+                    {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
                 </button>
+
+                {/* Close */}
                 <button onClick={onClose}
-                    className="flex size-9 items-center justify-center rounded-xl hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
-                    <X size={18} />
+                    className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
+                    <X size={16} />
                 </button>
             </div>
 
-            {/* content */}
+            {/* ── Main Content ── */}
             <div className="flex flex-1 overflow-hidden">
-                <div className="flex-1 overflow-auto flex items-start justify-center p-4" style={{ background: "#1a1f1c" }}>
-                    <div style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top center", transition: "transform .2s", width: "100%", maxWidth: 900 }}>
+                {/* PDF Area */}
+                <div className="flex-1 relative overflow-auto flex items-start justify-center"
+                    style={{ background: "#141a16", padding: fullscreen ? "0" : "1rem" }}>
+
+                    {/* Loading spinner overlay */}
+                    {loading && (
+                        <div className="absolute inset-0 flex items-center justify-center z-10"
+                            style={{ background: "rgba(10,15,13,0.85)" }}>
+                            <div className="flex flex-col items-center gap-3">
+                                <Loader2 size={36} className="animate-spin" style={{ color: doc.color }} />
+                                <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>Loading PDF…</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Error state */}
+                    {loadError && (
+                        <div className="absolute inset-0 flex items-center justify-center z-10"
+                            style={{ background: "rgba(10,15,13,0.9)" }}>
+                            <div className="flex flex-col items-center gap-4 text-center max-w-sm px-6">
+                                <div className="flex size-16 items-center justify-center rounded-2xl"
+                                    style={{ background: "rgba(239,68,68,0.15)" }}>
+                                    <FileText size={28} style={{ color: "#ef4444" }} />
+                                </div>
+                                <div>
+                                    <p className="font-black text-white text-base">Could not load PDF</p>
+                                    <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>
+                                        The file may have been removed or there was a connection error.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => { setLoadError(false); setLoading(true); }}
+                                    className="rounded-2xl px-6 py-2.5 text-sm font-black"
+                                    style={{ background: doc.color, color: "#fff" }}>
+                                    Try Again
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* The PDF iframe — uses our proxy to bypass Cloudinary CORS */}
+                    <div style={{
+                        transform: `scale(${zoom / 100})`,
+                        transformOrigin: "top center",
+                        transition: "transform 0.15s ease",
+                        width: "100%",
+                        maxWidth: fullscreen ? "none" : 960,
+                    }}>
                         <iframe
-                            src={`${pdfSrc}#page=${page}`}
+                            ref={iframeRef}
+                            key={`${doc._id}-${page}`}
+                            src={iframeSrc}
                             title={doc.title}
-                            className="w-full rounded-xl border"
-                            style={{ height: fullscreen ? "calc(100vh - 80px)" : "80vh", borderColor: "rgba(255,255,255,0.08)", background: "#fff" }}
+                            onLoad={() => setLoading(false)}
+                            onError={() => { setLoading(false); setLoadError(true); }}
+                            style={{
+                                width: "100%",
+                                height: fullscreen ? "100vh" : "calc(100vh - 130px)",
+                                border: "none",
+                                borderRadius: fullscreen ? 0 : 12,
+                                background: "#fff",
+                                display: "block",
+                            }}
                         />
                     </div>
                 </div>
 
-                {/* notes panel */}
+                {/* ── Notes Sidebar ── */}
                 {showNotes && (
-                    <div className="w-80 shrink-0 flex flex-col border-l" style={{ borderColor: "rgba(255,255,255,0.08)", background: "#0f1812" }}>
-                        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+                    <div className="w-72 xl:w-80 shrink-0 flex flex-col border-l"
+                        style={{ borderColor: "rgba(255,255,255,0.08)", background: "#0d1610" }}>
+                        <div className="flex items-center justify-between px-4 py-3 border-b shrink-0"
+                            style={{ borderColor: "rgba(255,255,255,0.08)" }}>
                             <div>
-                                <p className="font-black text-sm text-white">Page Notes</p>
-                                <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>Page {page} · {pageNotes.length} note{pageNotes.length !== 1 ? "s" : ""}</p>
+                                <p className="font-black text-sm text-white">Notes</p>
+                                <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                                    Page {page} · {pageNotes.length} note{pageNotes.length !== 1 ? "s" : ""}
+                                </p>
                             </div>
-                            <button onClick={() => setAddingNote(true)}
-                                className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black"
-                                style={{ background: `${doc.color}20`, color: doc.color }}>
+                            <button onClick={() => setAddingNote(true)} disabled={addingNote}
+                                className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black disabled:opacity-40 transition-all hover:scale-[1.03]"
+                                style={{ background: `${doc.color}22`, color: doc.color }}>
                                 <Plus size={12} /> Add
                             </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+
+                        <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ scrollbarWidth: "thin" }}>
+                            {/* Note input */}
                             {addingNote && (
-                                <div className="rounded-2xl p-3 space-y-2 border" style={{ background: `${doc.color}10`, borderColor: `${doc.color}30` }}>
-                                    <p className="text-xs font-bold" style={{ color: doc.color }}>Note for Page {page}</p>
-                                    <textarea autoFocus rows={4} value={noteText} onChange={e => setNoteText(e.target.value)}
+                                <div className="rounded-2xl p-3 space-y-2 border"
+                                    style={{ background: `${doc.color}0d`, borderColor: `${doc.color}30` }}>
+                                    <p className="text-xs font-black" style={{ color: doc.color }}>Note · Page {page}</p>
+                                    <textarea
+                                        autoFocus rows={4}
+                                        value={noteText}
+                                        onChange={e => setNoteText(e.target.value)}
                                         placeholder="Write your note…"
-                                        className="w-full rounded-xl px-3 py-2.5 text-sm resize-none outline-none"
-                                        style={{ background: "rgba(0,0,0,0.3)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)" }}
-                                        onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) saveNote(); }} />
-                                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>Ctrl+Enter to save</p>
+                                        className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none"
+                                        style={{ background: "rgba(0,0,0,0.35)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", lineHeight: 1.5 }}
+                                        onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) saveNote(); }}
+                                    />
+                                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>Ctrl+Enter to save</p>
                                     <div className="flex gap-2">
                                         <button onClick={() => { setAddingNote(false); setNoteText(""); }}
                                             className="flex-1 rounded-xl py-2 text-xs font-bold"
-                                            style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)" }}>Cancel</button>
-                                        <button onClick={saveNote}
-                                            className="flex-1 rounded-xl py-2 text-xs font-black"
-                                            style={{ background: doc.color, color: "#fff" }}>Save</button>
+                                            style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.55)" }}>
+                                            Cancel
+                                        </button>
+                                        <button onClick={saveNote} disabled={!noteText.trim()}
+                                            className="flex-1 rounded-xl py-2 text-xs font-black disabled:opacity-40"
+                                            style={{ background: doc.color, color: "#fff" }}>
+                                            Save
+                                        </button>
                                     </div>
                                 </div>
                             )}
+
+                            {/* No notes placeholder */}
                             {pageNotes.length === 0 && !addingNote && (
-                                <div className="flex flex-col items-center gap-2 py-10 text-center">
-                                    <StickyNote size={28} style={{ color: "rgba(255,255,255,0.15)" }} />
-                                    <p className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.3)" }}>No notes on this page</p>
+                                <div className="flex flex-col items-center gap-2 py-12 text-center">
+                                    <StickyNote size={26} style={{ color: "rgba(255,255,255,0.12)" }} />
+                                    <p className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.25)" }}>No notes on page {page}</p>
+                                    <button onClick={() => setAddingNote(true)}
+                                        className="text-xs font-black mt-1 rounded-xl px-3 py-1.5"
+                                        style={{ color: doc.color, background: `${doc.color}15` }}>
+                                        + Add a note
+                                    </button>
                                 </div>
                             )}
+
+                            {/* Note cards */}
                             {pageNotes.map(note => (
-                                <div key={note.id} className="group rounded-2xl p-3 border" style={{ background: `${doc.color}0d`, borderColor: `${doc.color}25` }}>
-                                    <div className="flex items-start justify-between gap-2">
-                                        <p className="text-sm text-white leading-relaxed flex-1">{note.text}</p>
+                                <div key={note.id} className="group rounded-2xl p-3.5 border"
+                                    style={{ background: `${doc.color}0a`, borderColor: `${doc.color}20` }}>
+                                    <div className="flex items-start gap-2">
+                                        <p className="text-sm text-white leading-relaxed flex-1 whitespace-pre-wrap">{note.text}</p>
                                         <button onClick={() => onDeleteNote(doc._id, note.id)}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity rounded-lg p-1 shrink-0" style={{ color: "#ef4444" }}>
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity rounded-lg p-1 shrink-0 hover:bg-red-500/20"
+                                            style={{ color: "#ef4444" }}>
                                             <Trash2 size={12} />
                                         </button>
                                     </div>
-                                    <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.3)" }}>
-                                        {new Date(note.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                                    <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.25)" }}>
+                                        {new Date(note.createdAt).toLocaleString("en-IN", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
                                     </p>
                                 </div>
                             ))}
+
+                            {/* All notes from other pages */}
+                            {doc.notes.filter(n => n.page !== page).length > 0 && (
+                                <details className="mt-2">
+                                    <summary className="text-xs font-bold cursor-pointer select-none py-1"
+                                        style={{ color: "rgba(255,255,255,0.3)" }}>
+                                        {doc.notes.filter(n => n.page !== page).length} notes from other pages
+                                    </summary>
+                                    <div className="mt-2 space-y-2">
+                                        {doc.notes.filter(n => n.page !== page).map(note => (
+                                            <div key={note.id}
+                                                className="group rounded-xl p-3 border cursor-pointer hover:opacity-80 transition-opacity"
+                                                style={{ background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.08)" }}
+                                                onClick={() => setPage(note.page)}>
+                                                <p className="text-xs font-bold mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>Page {note.page}</p>
+                                                <p className="text-xs text-white leading-relaxed line-clamp-2">{note.text}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </details>
+                            )}
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* bottom bar */}
-            <div className="flex items-center gap-4 px-5 py-2.5 border-t shrink-0"
-                style={{ borderColor: "rgba(255,255,255,0.08)", background: "#0f1812" }}>
-                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-                    <div className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%`, background: `linear-gradient(90deg,${doc.color}99,${doc.color})` }} />
+            {/* ── Bottom Bar ── */}
+            <div className="flex items-center gap-4 px-5 py-2 border-t shrink-0"
+                style={{ borderColor: "rgba(255,255,255,0.07)", background: "#0d1610" }}>
+                {/* Quick page jump buttons */}
+                <div className="hidden md:flex items-center gap-1.5 flex-wrap max-w-xs overflow-hidden">
+                    {Array.from({ length: Math.min(doc.totalPages, 12) }, (_, i) => i + 1).map(p => (
+                        <button
+                            key={p}
+                            onClick={() => setPage(p)}
+                            className="rounded-md text-xs font-bold transition-all"
+                            style={{
+                                width: 26, height: 22,
+                                background: p === page ? doc.color : "rgba(255,255,255,0.06)",
+                                color: p === page ? "#fff" : "rgba(255,255,255,0.35)",
+                                fontSize: "0.68rem",
+                            }}>
+                            {p}
+                        </button>
+                    ))}
+                    {doc.totalPages > 12 && (
+                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>+{doc.totalPages - 12} more</span>
+                    )}
                 </div>
-                <span className="text-xs font-bold shrink-0" style={{ color: "rgba(255,255,255,0.4)" }}>
-                    Page {page} of {doc.totalPages} · ← → navigate · Esc close
+
+                <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
+                    <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%`, background: `linear-gradient(90deg,${doc.color}88,${doc.color})` }} />
+                </div>
+
+                <span className="text-xs font-semibold shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>
+                    {page} / {doc.totalPages} · ← → navigate · Esc close
                 </span>
             </div>
         </div>
