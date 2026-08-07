@@ -52,7 +52,8 @@ providers.push(
 );
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-    secret: process.env.NEXTAUTH_SECRET ?? process.env.JWT_SECRET ?? "devtrack-secret-fallback",
+    secret: process.env.NEXTAUTH_SECRET ?? process.env.JWT_SECRET ?? "rahul123",
+    trustHost: true,
     providers,
     callbacks: {
         async signIn({ user, account, profile }) {
