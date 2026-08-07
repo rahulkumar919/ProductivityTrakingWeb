@@ -14,6 +14,7 @@ const StudyPdfSchema = new Schema(
         category: { type: String, default: "General" },
         pdfUrl: { type: String, required: true },      // Cloudinary URL
         publicId: { type: String, required: true },    // Cloudinary public_id for deletion
+        pdfData: { type: String, default: "" },        // base64 data URL (for direct serving)
         fileSize: { type: Number, default: 0 },
         totalPages: { type: Number, default: 1 },
         lastPage: { type: Number, default: 1 },

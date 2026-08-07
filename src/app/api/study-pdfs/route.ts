@@ -23,12 +23,12 @@ async function resolveUserId(): Promise<string | null> {
 
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#14b8a6", "#ec4899", "#8b5cf6", "#f97316"];
 
-/* GET — list all PDFs for user */
+/* GET — list all PDFs for user (exclude pdfData to keep response small) */
 export async function GET() {
     const userId = await resolveUserId();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     await connectToDatabase();
-    const pdfs = await StudyPdf.find({ userId }).sort({ createdAt: -1 });
+    const pdfs = await StudyPdf.find({ userId }).select("-pdfData").sort({ createdAt: -1 });
     return NextResponse.json(pdfs);
 }
 
@@ -70,6 +70,7 @@ export async function POST(request: Request) {
         category: body.category || "General",
         pdfUrl: result.secure_url,
         publicId: result.public_id,
+        pdfData: body.data,          // save base64 for direct proxy serving
         fileSize: body.fileSize,
         totalPages: body.totalPages || 1,
         lastPage: 1,

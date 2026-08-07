@@ -3,15 +3,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { auth } from "@/lib/next-auth";
 import { connectToDatabase } from "@/lib/db";
 import { StudyPdf } from "@/models";
-import { v2 as cloudinary } from "cloudinary";
-import { env } from "@/lib/env";
-
-cloudinary.config({
-    cloud_name: env.cloudinaryCloudName,
-    api_key: env.cloudinaryApiKey,
-    api_secret: env.cloudinaryApiSecret,
-    secure: true,
-});
 
 async function resolveUserId(): Promise<string | null> {
     const jwtUser = await getCurrentUser();
@@ -22,9 +13,8 @@ async function resolveUserId(): Promise<string | null> {
 }
 
 /**
- * Streams the PDF to the browser via a Cloudinary signed URL.
- * Cloudinary raw assets uploaded with resource_type:"raw" are private by default
- * and return 401 without a valid signature — so we generate one server-side.
+ * Serves the PDF directly from the base64 stored in MongoDB.
+ * No Cloudinary fetch needed — zero CORS issues.
  */
 export async function GET(
     _request: Request,
@@ -35,44 +25,29 @@ export async function GET(
 
     const { id } = await params;
     await connectToDatabase();
-    const pdf = await StudyPdf.findOne({ _id: id, userId });
+
+    // Select pdfData explicitly (it may be excluded by default projections)
+    const pdf = await StudyPdf.findOne({ _id: id, userId }).select("+pdfData +title");
     if (!pdf) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    try {
-        // Generate a signed URL valid for 1 hour
-        const signedUrl = cloudinary.url(pdf.publicId, {
-            resource_type: "raw",
-            type: "upload",
-            sign_url: true,
-            expires_at: Math.floor(Date.now() / 1000) + 3600,
-            secure: true,
-        });
+    const b64 = pdf.pdfData as string | undefined;
 
-        const upstream = await fetch(signedUrl, {
-            headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/pdf,*/*" },
-        });
-
-        if (!upstream.ok) {
-            return NextResponse.json(
-                { error: `Storage returned ${upstream.status}` },
-                { status: 502 }
-            );
-        }
-
-        const buffer = await upstream.arrayBuffer();
-
-        return new NextResponse(buffer, {
-            status: 200,
-            headers: {
-                "Content-Type": "application/pdf",
-                "Content-Disposition": `inline; filename="${encodeURIComponent(pdf.title)}.pdf"`,
-                "Content-Length": buffer.byteLength.toString(),
-                "X-Frame-Options": "SAMEORIGIN",
-                "Cache-Control": "private, max-age=3600",
-            },
-        });
-    } catch (err) {
-        console.error("[pdf-proxy] error:", err);
-        return NextResponse.json({ error: "Proxy error" }, { status: 500 });
+    if (!b64 || b64.length < 10) {
+        return NextResponse.json({ error: "PDF data not available" }, { status: 404 });
     }
+
+    // Strip the data URL prefix if present: "data:application/pdf;base64,..."
+    const base64 = b64.includes(",") ? b64.split(",")[1] : b64;
+    const buffer = Buffer.from(base64, "base64");
+
+    return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `inline; filename="${encodeURIComponent(pdf.title)}.pdf"`,
+            "Content-Length": buffer.length.toString(),
+            "X-Frame-Options": "SAMEORIGIN",
+            "Cache-Control": "private, max-age=3600",
+        },
+    });
 }
