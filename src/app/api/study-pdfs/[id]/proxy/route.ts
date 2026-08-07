@@ -46,7 +46,6 @@ export async function GET(
             "Content-Type": "application/pdf",
             "Content-Disposition": `inline; filename="${encodeURIComponent(pdf.title)}.pdf"`,
             "Content-Length": buffer.length.toString(),
-            "X-Frame-Options": "SAMEORIGIN",
             "Cache-Control": "private, max-age=3600",
         },
     });
