@@ -136,12 +136,6 @@ function LoginForm() {
       if (!apiRes.ok) {
         setToast({ msg: "Invalid mobile number or password.", ok: false });
       } else {
-        // Also sign in with NextAuth to set session cookie
-        await signIn("credentials", {
-          mobileNumber: mobile.replace(/[\s\-+]/g, ""),
-          password,
-          redirect: false,
-        });
         setToast({ msg: "Welcome back! Redirecting…", ok: true });
         setTimeout(() => { window.location.href = "/dashboard"; }, 800);
       }
