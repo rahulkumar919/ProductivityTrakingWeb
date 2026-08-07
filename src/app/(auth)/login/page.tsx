@@ -127,16 +127,23 @@ function LoginForm() {
     setErrors({});
     setLoading(true);
     try {
-      const result = await signIn("credentials", {
-        mobileNumber: mobile.replace(/[\s\-+]/g, ""),
-        password,
-        redirect: false,
+      // Call custom login API to set JWT cookie (used by middleware)
+      const apiRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobileNumber: mobile.replace(/[\s\-+]/g, ""), password }),
       });
-      if (result?.error) {
+      if (!apiRes.ok) {
         setToast({ msg: "Invalid mobile number or password.", ok: false });
       } else {
+        // Also sign in with NextAuth to set session cookie
+        await signIn("credentials", {
+          mobileNumber: mobile.replace(/[\s\-+]/g, ""),
+          password,
+          redirect: false,
+        });
         setToast({ msg: "Welcome back! Redirecting…", ok: true });
-        setTimeout(() => router.push("/dashboard"), 800);
+        setTimeout(() => { window.location.href = "/dashboard"; }, 800);
       }
     } catch {
       setToast({ msg: "Something went wrong. Please try again.", ok: false });
