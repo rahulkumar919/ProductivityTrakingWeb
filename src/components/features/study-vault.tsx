@@ -340,8 +340,6 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                         </div>
                     )}
 
-                    {/* error handled by proxy — iframe shows native PDF error if needed */}
-
                     {/* The PDF iframe — uses our proxy to bypass Cloudinary CORS */}
                     <div style={{
                         transform: `scale(${zoom / 100})`,
