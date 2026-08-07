@@ -25,7 +25,8 @@ export async function POST(request: Request) {
       res.headers.set("Set-Cookie", cookieValue);
       return res;
     }
-    const res = NextResponse.redirect(new URL("/dashboard", request.url), 303);
+    const redirectBase = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    const res = NextResponse.redirect(new URL("/dashboard", redirectBase), 303);
     res.headers.set("Set-Cookie", cookieValue);
     return res;
   } catch (error) {
