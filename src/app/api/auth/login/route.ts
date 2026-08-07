@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
-import { createToken, setAuthCookie, verifyPassword } from "@/lib/auth";
+import { createToken, verifyPassword, COOKIE_NAME } from "@/lib/auth";
 import { loginSchema } from "@/lib/validators";
 import { User } from "@/models";
 
@@ -16,11 +16,18 @@ export async function POST(request: Request) {
     if (!user || !(await verifyPassword(parsed.password, user.passwordHash))) {
       return NextResponse.json({ error: "Invalid mobile number or password." }, { status: 401 });
     }
-    await setAuthCookie(await createToken({ userId: String(user._id), name: user.name, mobileNumber: user.mobileNumber }));
-    // JSON clients handle redirect themselves; form submits get a 303
+    const token = await createToken({ userId: String(user._id), name: user.name, mobileNumber: user.mobileNumber });
     const isJson = (request.headers.get("content-type") ?? "").includes("application/json");
-    if (isJson) return NextResponse.json({ ok: true });
-    return NextResponse.redirect(new URL("/dashboard", request.url), 303);
+    const cookieValue = `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
+
+    if (isJson) {
+      const res = NextResponse.json({ ok: true });
+      res.headers.set("Set-Cookie", cookieValue);
+      return res;
+    }
+    const res = NextResponse.redirect(new URL("/dashboard", request.url), 303);
+    res.headers.set("Set-Cookie", cookieValue);
+    return res;
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Login failed." }, { status: 400 });
   }
