@@ -2,21 +2,9 @@
 
 import Link from "next/link";
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Eye, EyeOff, ArrowRight, Loader2, Shield, Smartphone, Lock } from "lucide-react";
-
-/* ── tiny validation helpers ─────────────────────────────────── */
-function validateMobile(v: string) {
-  if (!v.trim()) return "Mobile number is required.";
-  if (!/^\d{8,15}$/.test(v.replace(/[\s\-+]/g, ""))) return "Enter a valid mobile number.";
-  return "";
-}
-function validatePwd(v: string) {
-  if (!v) return "Password is required.";
-  if (v.length < 8) return "Password must be at least 8 characters.";
-  return "";
-}
+import { Loader2, Shield, Lock } from "lucide-react";
 
 /* ── Google SVG ──────────────────────────────────────────────── */
 function GoogleIcon() {
@@ -35,25 +23,18 @@ function MountainScene() {
   return (
     <svg viewBox="0 0 400 260" fill="none" xmlns="http://www.w3.org/2000/svg"
       style={{ position: "absolute", bottom: 0, left: 0, width: "100%", opacity: 0.9 }}>
-      {/* sky glow */}
       <ellipse cx="200" cy="200" rx="180" ry="80" fill="url(#skyGlow)" />
-      {/* back mountains */}
       <path d="M0 260 L60 140 L120 200 L180 100 L240 170 L300 80 L360 150 L400 120 L400 260Z"
         fill="url(#mtBack)" opacity="0.5" />
-      {/* mid mountains */}
       <path d="M0 260 L80 160 L150 210 L220 120 L290 180 L340 130 L400 160 L400 260Z"
         fill="url(#mtMid)" opacity="0.7" />
-      {/* front hills */}
       <path d="M0 260 L100 200 L180 230 L260 190 L340 220 L400 200 L400 260Z"
         fill="url(#mtFront)" />
-      {/* path/road */}
       <path d="M180 260 Q200 200 210 170 Q215 155 200 140" stroke="#5ec4a8"
         strokeWidth="2" strokeDasharray="4 3" opacity="0.6" fill="none" />
-      {/* flag at top */}
       <circle cx="200" cy="138" r="3" fill="#5ec4a8" />
       <line x1="200" y1="138" x2="200" y2="122" stroke="#5ec4a8" strokeWidth="1.5" />
       <path d="M200 122 L212 127 L200 132Z" fill="#5ec4a8" />
-      {/* stars */}
       {[[60, 40], [100, 20], [160, 50], [280, 30], [340, 60], [370, 25]].map(([x, y], i) => (
         <circle key={i} cx={x} cy={y} r="1.5" fill="white" opacity="0.6" />
       ))}
@@ -76,7 +57,6 @@ function MountainScene() {
   );
 }
 
-/* ── Feature list item ───────────────────────────────────────── */
 const FEATURES = [
   { icon: "🎯", title: "Track daily habits & routines", sub: "Build consistency that lasts" },
   { icon: "✨", title: "AI-powered productivity insights", sub: "Smarter analytics for better you" },
@@ -85,25 +65,16 @@ const FEATURES = [
 ];
 
 /* ══════════════════════════════════════════════════════════════
-   INNER COMPONENT (needs useSearchParams → must be in Suspense)
+   INNER COMPONENT
 ══════════════════════════════════════════════════════════════ */
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-
-  const [mobile, setMobile] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [errors, setErrors] = useState<{ mobile?: string; password?: string }>({});
-  const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Handle OAuth error param from NextAuth
     const err = searchParams.get("error");
     if (err === "OAuthAccountNotLinked") {
       setToast({ msg: "This email is linked to another sign-in method.", ok: false });
@@ -118,41 +89,9 @@ function LoginForm() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  /* ── Credentials submit ───────────────────────────────────── */
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const mErr = validateMobile(mobile);
-    const pErr = validatePwd(password);
-    if (mErr || pErr) { setErrors({ mobile: mErr, password: pErr }); return; }
-    setErrors({});
-    setLoading(true);
-    try {
-      // Call custom login API to set JWT cookie (used by middleware)
-      const apiRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobileNumber: mobile.replace(/[\s\-+]/g, ""), password }),
-      });
-      if (!apiRes.ok) {
-        setToast({ msg: "Invalid mobile number or password.", ok: false });
-      } else {
-        setToast({ msg: "Welcome back! Redirecting…", ok: true });
-        setTimeout(() => { window.location.href = "/dashboard"; }, 800);
-      }
-    } catch {
-      setToast({ msg: "Something went wrong. Please try again.", ok: false });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /* ── Google OAuth ─────────────────────────────────────────── */
   async function handleGoogle() {
     setGoogleLoading(true);
     try {
-      // callbackUrl points to our bridge route which issues the custom
-      // devtrack_token cookie that the middleware checks, then redirects
-      // to /dashboard.
       await signIn("google", { callbackUrl: "/api/auth/google-complete" });
     } catch {
       setToast({ msg: "Google sign-in failed. Please try again.", ok: false });
@@ -164,10 +103,12 @@ function LoginForm() {
 
   return (
     <main className="lg-root">
-      {/* animated ambient blobs */}
-      <div className="lg-blob lg-blob-1" /><div className="lg-blob lg-blob-2" /><div className="lg-blob lg-blob-3" />
+      {/* ambient blobs */}
+      <div className="lg-blob lg-blob-1" />
+      <div className="lg-blob lg-blob-2" />
+      <div className="lg-blob lg-blob-3" />
 
-      {/* floating particles */}
+      {/* particles */}
       <div className="lg-particles" aria-hidden="true">
         {Array.from({ length: 24 }).map((_, i) => (
           <span key={i} className="lg-particle" style={{ "--pi": i } as React.CSSProperties} />
@@ -186,7 +127,6 @@ function LoginForm() {
         <div className="lg-left">
           <MountainScene />
           <div className="lg-left-content">
-            {/* logo */}
             <div className="lg-logo">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" />
@@ -209,76 +149,34 @@ function LoginForm() {
           </div>
         </div>
 
-        {/* ── RIGHT FORM PANEL ── */}
+        {/* ── RIGHT PANEL ── */}
         <div className="lg-right">
-          {/* secure badge */}
           <div className="lg-secure-badge"><Shield size={12} /> Secure &amp; Private</div>
 
           <div className="lg-form-wrap">
             <div className="lg-header">
               <h1 className="lg-title">Welcome back <span className="lg-wave">👋</span></h1>
-              <p className="lg-sub">Sign in to continue your journey</p>
+              <p className="lg-sub">Sign in with your Google account to continue</p>
             </div>
 
-            <form onSubmit={handleSubmit} noValidate className="lg-form">
-              {/* Mobile */}
-              <div className="lg-field">
-                <label className="lg-label" htmlFor="lg-mobile">Mobile Number</label>
-                <div className={`lg-input-wrap ${errors.mobile ? "lg-input-err" : ""}`}>
-                  <Smartphone size={16} className="lg-input-icon" />
-                  <input id="lg-mobile" type="tel" autoComplete="tel" placeholder="Enter your mobile number"
-                    value={mobile} onChange={e => { setMobile(e.target.value); setErrors(p => ({ ...p, mobile: "" })); }}
-                    onBlur={() => setErrors(p => ({ ...p, mobile: validateMobile(mobile) }))}
-                    className="lg-input" disabled={loading} />
-                </div>
-                {errors.mobile && <p className="lg-error">{errors.mobile}</p>}
-              </div>
-
-              {/* Password */}
-              <div className="lg-field">
-                <label className="lg-label" htmlFor="lg-pwd">Password</label>
-                <div className={`lg-input-wrap ${errors.password ? "lg-input-err" : ""}`}>
-                  <Lock size={16} className="lg-input-icon" />
-                  <input id="lg-pwd" type={showPwd ? "text" : "password"} autoComplete="current-password"
-                    placeholder="Enter your password" value={password}
-                    onChange={e => { setPassword(e.target.value); setErrors(p => ({ ...p, password: "" })); }}
-                    onBlur={() => setErrors(p => ({ ...p, password: validatePwd(password) }))}
-                    className="lg-input lg-input-pwd" disabled={loading} />
-                  <button type="button" className="lg-eye" onClick={() => setShowPwd(v => !v)} tabIndex={-1} aria-label={showPwd ? "Hide password" : "Show password"}>
-                    {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                {errors.password && <p className="lg-error">{errors.password}</p>}
-              </div>
-
-              {/* remember + forgot */}
-              <div className="lg-row">
-                <label className="lg-check-label">
-                  <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="lg-check-native" />
-                  <span className="lg-check-box" /><span>Remember me</span>
-                </label>
-                <button type="button" className="lg-forgot" onClick={() => alert("Password reset coming soon!")}>Forgot password?</button>
-              </div>
-
-              {/* submit */}
-              <button type="submit" className="lg-submit" disabled={loading || googleLoading} aria-busy={loading}>
-                {loading ? <><Loader2 size={18} className="lg-spin" /> Signing in…</> : <>Sign In <ArrowRight size={18} /></>}
-              </button>
-            </form>
-
-            {/* divider */}
-            <div className="lg-divider"><span /><span className="lg-div-txt">or continue with</span><span /></div>
-
-            {/* social */}
-            <div className="lg-socials">
-              <button type="button" className="lg-social lg-google" onClick={handleGoogle} disabled={loading || googleLoading}>
-                {googleLoading ? <Loader2 size={18} className="lg-spin" /> : <GoogleIcon />}
-                {googleLoading ? "Connecting…" : "Continue with Google"}
-              </button>
-            </div>
+            {/* Google button */}
+            <button
+              type="button"
+              className="lg-google-btn"
+              onClick={handleGoogle}
+              disabled={googleLoading}
+              aria-busy={googleLoading}
+            >
+              {googleLoading
+                ? <><Loader2 size={20} className="lg-spin" /> Connecting…</>
+                : <><GoogleIcon /> Continue with Google</>}
+            </button>
 
             {/* register link */}
-            <p className="lg-reg-txt">Don&apos;t have an account? <Link href="/register" className="lg-reg-link">Create one free →</Link></p>
+            <p className="lg-reg-txt">
+              Don&apos;t have an account?{" "}
+              <Link href="/register" className="lg-reg-link">Create one free →</Link>
+            </p>
 
             {/* trust badge */}
             <div className="lg-trust">
@@ -307,7 +205,7 @@ function LoginForm() {
         .lg-toast-ok{background:#16614f;color:#7ee8d0;border:1px solid rgba(94,196,168,.3);}
         .lg-toast-err{background:#3d1616;color:#f87171;border:1px solid rgba(239,68,68,.3);}
         @keyframes lgSlideIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
-        .lg-card{position:relative;z-index:10;display:flex;width:100%;max-width:960px;min-height:620px;border-radius:28px;overflow:hidden;box-shadow:0 0 0 1px rgba(94,196,168,.12),0 40px 120px rgba(0,0,0,.7);animation:lgUp .6s cubic-bezier(.22,1,.36,1) both;}
+        .lg-card{position:relative;z-index:10;display:flex;width:100%;max-width:960px;min-height:580px;border-radius:28px;overflow:hidden;box-shadow:0 0 0 1px rgba(94,196,168,.12),0 40px 120px rgba(0,0,0,.7);animation:lgUp .6s cubic-bezier(.22,1,.36,1) both;}
         @keyframes lgUp{from{opacity:0;transform:translateY(40px);}to{opacity:1;transform:translateY(0);}}
         .lg-left{position:relative;flex:0 0 380px;overflow:hidden;background:linear-gradient(160deg,#0a2319 0%,#0d2e1f 40%,#12402b 70%,#0a2218 100%);}
         @media(max-width:800px){.lg-left{display:none;}}
@@ -324,49 +222,21 @@ function LoginForm() {
         .lg-feat-sub{font-size:.72rem;color:rgba(255,255,255,.4);margin:.1rem 0 0;}
         .lg-right{flex:1;background:rgba(11,20,16,.9);backdrop-filter:blur(32px);display:flex;align-items:center;justify-content:center;padding:2.5rem 2rem;position:relative;}
         .lg-secure-badge{position:absolute;top:1.25rem;right:1.25rem;display:flex;align-items:center;gap:.4rem;padding:.3rem .75rem;border-radius:99px;background:rgba(94,196,168,.08);border:1px solid rgba(94,196,168,.18);font-size:.68rem;font-weight:700;color:#5ec4a8;}
-        .lg-form-wrap{width:100%;max-width:400px;display:flex;flex-direction:column;gap:0;}
-        .lg-header{margin-bottom:1.75rem;}
-        .lg-title{font-size:1.75rem;font-weight:900;color:#f0f5f2;margin:0;display:flex;align-items:center;gap:.5rem;}
+        .lg-form-wrap{width:100%;max-width:360px;display:flex;flex-direction:column;gap:0;}
+        .lg-header{margin-bottom:2.5rem;}
+        .lg-title{font-size:1.9rem;font-weight:900;color:#f0f5f2;margin:0;display:flex;align-items:center;gap:.5rem;}
         .lg-wave{display:inline-block;animation:lgWave 2s ease-in-out infinite;}
         @keyframes lgWave{0%,100%{transform:rotate(0deg);}25%{transform:rotate(20deg);}75%{transform:rotate(-10deg);}}
-        .lg-sub{font-size:.85rem;color:#4a6b5a;margin:.35rem 0 0;}
-        .lg-form{display:flex;flex-direction:column;gap:1rem;}
-        .lg-field{display:flex;flex-direction:column;gap:.4rem;}
-        .lg-label{font-size:.78rem;font-weight:600;color:#8aada0;}
-        .lg-input-wrap{display:flex;align-items:center;gap:0;border-radius:12px;border:1.5px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);transition:border-color .2s,box-shadow .2s;overflow:hidden;}
-        .lg-input-wrap:focus-within{border-color:#5ec4a8;box-shadow:0 0 0 3px rgba(94,196,168,.12);}
-        .lg-input-err{border-color:#ef4444 !important;}
-        .lg-input-icon{color:#4a6b5a;flex-shrink:0;margin-left:.9rem;}
-        .lg-input{flex:1;height:48px;padding:0 .9rem;background:transparent;border:none;outline:none;color:#f0f5f2;font-size:.9rem;}
-        .lg-input::placeholder{color:#2e4d3e;}
-        .lg-input-pwd{padding-right:0;}
-        .lg-eye{display:flex;align-items:center;justify-content:center;width:44px;height:48px;background:transparent;border:none;cursor:pointer;color:#4a6b5a;flex-shrink:0;transition:color .15s;}
-        .lg-eye:hover{color:#5ec4a8;}
-        .lg-error{font-size:.72rem;color:#f87171;margin:0;}
-        .lg-row{display:flex;align-items:center;justify-content:space-between;}
-        .lg-check-native{display:none;}
-        .lg-check-label{display:flex;align-items:center;gap:.5rem;font-size:.78rem;color:#4a6b5a;cursor:pointer;user-select:none;}
-        .lg-check-box{width:16px;height:16px;border-radius:5px;border:1.5px solid #2e4d3e;flex-shrink:0;transition:background .2s,border-color .2s;background:transparent;}
-        .lg-check-native:checked+.lg-check-box{background:#5ec4a8;border-color:#5ec4a8;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 8'%3E%3Cpath d='M1 4l3 3 5-6' stroke='%23071510' strokeWidth='1.8' fill='none' strokeLinecap='round'/%3E%3C/svg%3E");background-size:10px 8px;background-repeat:no-repeat;background-position:center;}
-        .lg-forgot{font-size:.78rem;color:#5ec4a8;background:none;border:none;cursor:pointer;padding:0;transition:color .15s;}
-        .lg-forgot:hover{color:#7ee8d0;}
-        .lg-submit{display:flex;align-items:center;justify-content:center;gap:.5rem;height:52px;border-radius:14px;background:linear-gradient(135deg,#16614f 0%,#5ec4a8 100%);color:#fff;font-size:.95rem;font-weight:800;border:none;cursor:pointer;transition:transform .2s,box-shadow .2s,opacity .2s;box-shadow:0 8px 28px rgba(22,97,79,.5);letter-spacing:.02em;margin-top:.25rem;}
-        .lg-submit:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 14px 36px rgba(22,97,79,.65);}
-        .lg-submit:disabled{opacity:.65;cursor:not-allowed;}
+        .lg-sub{font-size:.88rem;color:#4a6b5a;margin:.4rem 0 0;line-height:1.5;}
+        .lg-google-btn{display:flex;align-items:center;justify-content:center;gap:.75rem;width:100%;height:56px;border-radius:16px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#e8f0ec;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .2s,border-color .2s,color .2s,transform .15s,box-shadow .2s;box-shadow:0 4px 20px rgba(0,0,0,.3);}
+        .lg-google-btn:hover:not(:disabled){background:rgba(255,255,255,.1);border-color:rgba(66,133,244,.5);color:#fff;transform:translateY(-2px);box-shadow:0 8px 28px rgba(66,133,244,.2);}
+        .lg-google-btn:disabled{opacity:.6;cursor:not-allowed;}
         .lg-spin{animation:lgSpin .7s linear infinite;}
         @keyframes lgSpin{to{transform:rotate(360deg);}}
-        .lg-divider{display:flex;align-items:center;gap:.75rem;margin:1.4rem 0 1rem;}
-        .lg-divider span:first-child,.lg-divider span:last-child{flex:1;height:1px;background:rgba(255,255,255,.06);}
-        .lg-div-txt{font-size:.72rem;color:#2e4d3e;white-space:nowrap;}
-        .lg-socials{display:flex;flex-direction:column;gap:.65rem;}
-        .lg-social{display:flex;align-items:center;justify-content:center;gap:.65rem;height:48px;border-radius:13px;border:1.5px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04);color:#c4d4cc;font-size:.85rem;font-weight:600;cursor:pointer;transition:background .2s,border-color .2s,color .2s,transform .15s;}
-        .lg-social:hover:not(:disabled){background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.18);color:#fff;transform:translateY(-1px);}
-        .lg-social:disabled{opacity:.6;cursor:not-allowed;}
-        .lg-google:hover:not(:disabled){border-color:rgba(66,133,244,.4);}
-        .lg-reg-txt{text-align:center;font-size:.8rem;color:#2e4d3e;margin:1.25rem 0 0;}
+        .lg-reg-txt{text-align:center;font-size:.8rem;color:#2e4d3e;margin:1.75rem 0 0;}
         .lg-reg-link{color:#5ec4a8;font-weight:700;text-decoration:none;transition:color .15s;}
         .lg-reg-link:hover{color:#7ee8d0;}
-        .lg-trust{display:flex;align-items:center;gap:.85rem;padding:.9rem;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);margin-top:1rem;}
+        .lg-trust{display:flex;align-items:center;gap:.85rem;padding:.9rem;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);margin-top:1.5rem;}
         .lg-trust-icon{color:#5ec4a8;flex-shrink:0;}
         .lg-trust-title{font-size:.78rem;font-weight:700;color:#8aada0;margin:0;}
         .lg-trust-sub{font-size:.7rem;color:#2e4d3e;margin:.1rem 0 0;}
