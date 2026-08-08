@@ -4,6 +4,11 @@ import { createToken, hashPassword, COOKIE_NAME } from "@/lib/auth";
 import { registerSchema } from "@/lib/validators";
 import { User } from "@/models";
 
+/** Strip +, spaces, dashes so stored and submitted numbers always match */
+function normalizeMobile(num: string) {
+  return num.replace(/[\s\-+]/g, "");
+}
+
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") ?? "";
@@ -11,10 +16,11 @@ export async function POST(request: Request) {
       ? await request.json()
       : Object.fromEntries(await request.formData());
     const parsed = registerSchema.parse(raw);
+    const normalizedMobile = normalizeMobile(parsed.mobileNumber);
     await connectToDatabase();
-    const existing = await User.findOne({ mobileNumber: parsed.mobileNumber });
+    const existing = await User.findOne({ mobileNumber: normalizedMobile });
     if (existing) return NextResponse.json({ error: "Mobile number already registered." }, { status: 409 });
-    const user = await User.create({ name: parsed.name, mobileNumber: parsed.mobileNumber, passwordHash: await hashPassword(parsed.password) });
+    const user = await User.create({ name: parsed.name, mobileNumber: normalizedMobile, passwordHash: await hashPassword(parsed.password) });
     const token = await createToken({ userId: String(user._id), name: user.name, mobileNumber: user.mobileNumber });
     const isJson = (request.headers.get("content-type") ?? "").includes("application/json");
     const cookieValue = `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;

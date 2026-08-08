@@ -4,6 +4,11 @@ import { createToken, verifyPassword, COOKIE_NAME } from "@/lib/auth";
 import { loginSchema } from "@/lib/validators";
 import { User } from "@/models";
 
+/** Strip +, spaces, dashes so stored and submitted numbers always match */
+function normalizeMobile(num: string) {
+  return num.replace(/[\s\-+]/g, "");
+}
+
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") ?? "";
@@ -11,8 +16,12 @@ export async function POST(request: Request) {
       ? await request.json()
       : Object.fromEntries(await request.formData());
     const parsed = loginSchema.parse(raw);
+    const normalizedMobile = normalizeMobile(parsed.mobileNumber);
     await connectToDatabase();
-    const user = await User.findOne({ mobileNumber: parsed.mobileNumber });
+    // Try exact normalized match first, then fallback to original value
+    const user = await User.findOne({
+      mobileNumber: { $in: [normalizedMobile, parsed.mobileNumber] },
+    });
     if (!user || !(await verifyPassword(parsed.password, user.passwordHash))) {
       return NextResponse.json({ error: "Invalid mobile number or password." }, { status: 401 });
     }
