@@ -150,7 +150,10 @@ function LoginForm() {
   async function handleGoogle() {
     setGoogleLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      // callbackUrl points to our bridge route which issues the custom
+      // devtrack_token cookie that the middleware checks, then redirects
+      // to /dashboard.
+      await signIn("google", { callbackUrl: "/api/auth/google-complete" });
     } catch {
       setToast({ msg: "Google sign-in failed. Please try again.", ok: false });
       setGoogleLoading(false);
