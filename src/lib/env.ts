@@ -19,4 +19,7 @@ export const env = {
   cloudinaryCloudName: optionalEnv("CLOUDINARY_CLOUD_NAME"),
   cloudinaryApiKey: optionalEnv("CLOUDINARY_API_KEY"),
   cloudinaryApiSecret: optionalEnv("CLOUDINARY_API_SECRET"),
+  // Public env vars (safe to expose to browser)
+  cloudinaryPublicCloudName: optionalEnv("NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME"),
+  cloudinaryUploadPreset: optionalEnv("NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET"),
 };

@@ -29,15 +29,7 @@ const CATEGORIES = [
 ];
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#14b8a6", "#ec4899", "#8b5cf6", "#f97316"];
 
-/* ─── Local PDF cache (base64) ───────────────────────────────────── */
-// We store base64 in localStorage keyed by DB _id so the viewer works offline
-// without any CORS/Cloudinary issues — exactly like the original flow.
-function getCachedPdf(id: string): string | null {
-    try { return localStorage.getItem(`sv_pdf_${id}`); } catch { return null; }
-}
-function setCachedPdf(id: string, base64: string) {
-    try { localStorage.setItem(`sv_pdf_${id}`, base64); } catch { /* storage full */ }
-}
+/* ─── Local PDF cache cleanup helpers ───────────────────────────── */
 function removeCachedPdf(id: string) {
     try { localStorage.removeItem(`sv_pdf_${id}`); } catch { /* ignore */ }
 }
@@ -50,13 +42,39 @@ function fmtSize(b: number) {
 function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
-function fileToBase64(file: File): Promise<string> {
-    return new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result as string);
-        r.onerror = rej;
-        r.readAsDataURL(file);
+
+/* ─── Cloudinary direct upload ───────────────────────────────────── */
+async function uploadToCloudinary(file: File): Promise<{ secure_url: string; public_id: string }> {
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !uploadPreset) {
+        throw new Error("Cloudinary is not configured. Please set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET.");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", uploadPreset);
+    formData.append("folder", "devtrack/study-pdfs");
+    formData.append("resource_type", "raw");
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`, {
+        method: "POST",
+        body: formData,
     });
+
+    if (!res.ok) {
+        // Cloudinary returns JSON errors
+        let msg = `Cloudinary upload failed (${res.status})`;
+        try {
+            const err = await res.json() as { error?: { message?: string } };
+            if (err.error?.message) msg = err.error.message;
+        } catch { /* ignore parse error */ }
+        throw new Error(msg);
+    }
+
+    const data = await res.json() as { secure_url: string; public_id: string };
+    return { secure_url: data.secure_url, public_id: data.public_id };
 }
 
 /* ─── Upload Modal ───────────────────────────────────────────────── */
@@ -69,6 +87,7 @@ function UploadModal({ onClose, onUploaded }: {
     const [category, setCategory] = useState("General");
     const [dragging, setDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [uploadStage, setUploadStage] = useState<"cloudinary" | "saving" | "">("");
     const [error, setError] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -86,22 +105,53 @@ function UploadModal({ onClose, onUploaded }: {
         if (!title.trim()) { setError("Please enter a title."); return; }
         setUploading(true); setError("");
         try {
-            const data = await fileToBase64(file);
+            // Step 1: Upload PDF directly from browser to Cloudinary (bypasses Vercel 4.5MB limit)
+            setUploadStage("cloudinary");
+            const { secure_url, public_id } = await uploadToCloudinary(file);
+
+            // Step 2: Save metadata (URL, title, category) to our API — tiny JSON payload
+            setUploadStage("saving");
             const res = await fetch("/api/study-pdfs", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title: title.trim(), category, data, fileSize: file.size, totalPages: 1 }),
+                body: JSON.stringify({
+                    title: title.trim(),
+                    category,
+                    pdfUrl: secure_url,
+                    publicId: public_id,
+                    fileSize: file.size,
+                    totalPages: 1,
+                }),
             });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error ?? "Upload failed");
-            // Cache base64 locally so viewer works immediately
-            setCachedPdf(json._id, data);
-            onUploaded(json);
+
+            // Gracefully handle non-JSON error responses (e.g. 413, 502, Vercel errors)
+            let json: Record<string, unknown>;
+            const contentType = res.headers.get("content-type") ?? "";
+            if (contentType.includes("application/json")) {
+                json = await res.json() as Record<string, unknown>;
+            } else {
+                const text = await res.text();
+                if (!res.ok) throw new Error(`Server error (${res.status}): ${text.slice(0, 120)}`);
+                throw new Error("Unexpected response from server.");
+            }
+
+            if (!res.ok) throw new Error((json.error as string) ?? "Upload failed");
+
+            onUploaded(json as unknown as PDFDoc);
             onClose();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Upload failed. Try again.");
-        } finally { setUploading(false); }
+        } finally {
+            setUploading(false);
+            setUploadStage("");
+        }
     }
+
+    const uploadLabel = uploadStage === "cloudinary"
+        ? "Uploading to cloud…"
+        : uploadStage === "saving"
+            ? "Saving…"
+            : "Uploading…";
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center"
@@ -176,7 +226,7 @@ function UploadModal({ onClose, onUploaded }: {
                             style={{ background: "var(--muted)", color: "var(--foreground)" }}>Cancel</button>
                         <button type="submit" disabled={uploading} className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black"
                             style={{ background: uploading ? "var(--muted)" : "linear-gradient(135deg,#16614f,#5ec4a8)", color: uploading ? "var(--muted-foreground)" : "#fff" }}>
-                            {uploading ? <><Loader2 size={16} className="animate-spin" /> Uploading…</> : <><Upload size={15} /> Upload & Save</>}
+                            {uploading ? <><Loader2 size={16} className="animate-spin" /> {uploadLabel}</> : <><Upload size={15} /> Upload & Save</>}
                         </button>
                     </div>
                 </form>

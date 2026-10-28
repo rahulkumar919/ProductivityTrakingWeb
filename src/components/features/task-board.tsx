@@ -2,8 +2,8 @@
 
 import {
   AlertCircle, Bell, Calendar, CheckCircle2, ChevronDown,
-  Circle, Clock, Filter, MoreVertical, Plus, Search,
-  Trash2, TrendingUp, X,
+  Circle, Clock, Filter, ImagePlus, Loader2, MoreVertical, Plus, Search,
+  Sparkles, Trash2, TrendingUp, X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -62,6 +62,12 @@ function AddTaskModal({ onAdd, onClose }: { onAdd: (t: Task) => void; onClose: (
   const [deadline, setDeadline] = useState("");
   const [time, setTime] = useState("08:00");
 
+  // AI image scan state
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const [scanSuccess, setScanSuccess] = useState(false);
+  const imgInputRef = useRef<HTMLInputElement>(null);
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !deadline) return;
@@ -69,13 +75,135 @@ function AddTaskModal({ onAdd, onClose }: { onAdd: (t: Task) => void; onClose: (
     onClose();
   }
 
+  async function handleImageScan(file: File) {
+    if (!file.type.startsWith("image/")) { setScanError("Please upload an image file."); return; }
+    if (file.size > 3 * 1024 * 1024) { setScanError("Image must be under 3 MB for AI scan."); return; }
+
+    setScanning(true); setScanError(""); setScanSuccess(false);
+
+    try {
+      // Convert image to base64
+      const base64 = await new Promise<string>((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result as string);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+
+      const response = await fetch("/api/tasks/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64 }),
+      });
+
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(`Server error (${response.status})`);
+      }
+      const data = await response.json() as {
+        title?: string; description?: string;
+        category?: string; priority?: string; deadline?: string;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error ?? "Scan failed");
+
+      // Auto-fill form fields — only overwrite if Gemini returned a value
+      if (data.title) setTitle(data.title);
+      if (data.description) setDesc(data.description);
+      if (data.category) setCat(data.category as Category);
+      if (data.priority) setPriority(data.priority as Priority);
+      if (data.deadline) setDeadline(data.deadline);
+      setScanSuccess(true);
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "Scan failed. Please fill in manually.");
+    } finally {
+      setScanning(false);
+      // Reset the file input so the same file can be re-selected
+      if (imgInputRef.current) imgInputRef.current.value = "";
+    }
+  }
+
   return (
     <div className="tb-overlay" onClick={onClose}>
       <div className="tb-modal" onClick={e => e.stopPropagation()}>
         <div className="tb-modal-hd">
-          <div><h2 className="tb-modal-title">Add New Task</h2><p className="tb-modal-sub">Plan, prioritize, execute.</p></div>
-          <button onClick={onClose} className="tb-icon-btn"><X size={18} /></button>
+          <div>
+            <h2 className="tb-modal-title">Add New Task</h2>
+            <p className="tb-modal-sub">Plan, prioritize, execute.</p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {/* AI scan button */}
+            <input
+              ref={imgInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              style={{ display: "none" }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) void handleImageScan(f); }}
+            />
+            <button
+              type="button"
+              onClick={() => imgInputRef.current?.click()}
+              disabled={scanning}
+              title="Scan image to auto-fill task"
+              className="tb-scan-btn"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                height: 34, padding: "0 12px", borderRadius: 10,
+                border: "1.5px solid var(--border)",
+                background: scanSuccess ? "rgba(34,197,94,0.08)" : "var(--muted)",
+                color: scanSuccess ? "#22c55e" : "var(--muted-foreground)",
+                fontSize: "0.78rem", fontWeight: 700, cursor: scanning ? "not-allowed" : "pointer",
+                transition: "all .15s", opacity: scanning ? 0.7 : 1,
+              }}
+            >
+              {scanning
+                ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Scanning…</>
+                : scanSuccess
+                  ? <><Sparkles size={13} /> Filled!</>
+                  : <><ImagePlus size={13} /> Scan Image</>
+              }
+            </button>
+            <button onClick={onClose} className="tb-icon-btn"><X size={18} /></button>
+          </div>
         </div>
+
+        {/* Scan status messages */}
+        {scanError && (
+          <div style={{ margin: "0 22px", padding: "8px 12px", borderRadius: 8, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
+            <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, color: "#ef4444" }}>⚠️ {scanError}</p>
+          </div>
+        )}
+        {scanSuccess && (
+          <div style={{ margin: "0 22px", padding: "8px 12px", borderRadius: 8, background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)" }}>
+            <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, color: "#22c55e" }}>✓ Task auto-filled from image — review and adjust below.</p>
+          </div>
+        )}
+
+        {/* Scan drop zone hint when no title yet */}
+        {!title && !scanning && (
+          <div
+            onClick={() => imgInputRef.current?.click()}
+            style={{
+              margin: "0 22px", padding: "14px 16px", borderRadius: 12,
+              border: "1.5px dashed var(--border)", background: "var(--muted)",
+              cursor: "pointer", textAlign: "center", transition: "border-color .15s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--primary)")}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--muted-foreground)" }}>
+              <Sparkles size={15} style={{ color: "var(--primary)" }} />
+              <span style={{ fontSize: "0.82rem", fontWeight: 700 }}>
+                Drop or click to scan an image — AI will auto-fill your task
+              </span>
+            </div>
+            <p style={{ margin: "4px 0 0", fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
+              Screenshot, assignment sheet, handwritten note — max 3 MB
+            </p>
+          </div>
+        )}
+
         <form onSubmit={submit} className="tb-modal-body">
           <div className="tb-field"><label className="tb-label">Task Title *</label>
             <input className="tb-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Build AI Agent (MCP Server)" required autoFocus /></div>
@@ -163,9 +291,10 @@ function TaskRow({ task, onStatus, onDelete }: {
         <div className="tb-task-tags">
           <span className="tb-tag" style={{ background: `${CAT_COLOR2[task.category] ?? "#aeb7a7"}18`, color: CAT_COLOR2[task.category] ?? "#aeb7a7" }}>{task.category}</span>
           <span className="tb-tag" style={{ background: PRIORITY_BG2[task.priority], color: PRIORITY_COLOR2[task.priority] }}>{task.priority}</span>
+          {overdue && <span className="tb-tag" style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444" }}>Overdue</span>}
         </div>
       </div>
-      <span className="tb-task-time">{task.deadline ? `${fmtDate(task.deadline)}` : "—"}</span>
+      <span className="tb-task-time" style={{ color: overdue ? "#ef4444" : undefined }}>{task.deadline ? fmtDate(task.deadline) : "—"}</span>
       <div ref={ref} style={{ position: "relative" }}>
         <button onClick={() => setMenu(v => !v)} className="tb-icon-btn" aria-label="options"><MoreVertical size={16} /></button>
         {menu && (
@@ -210,7 +339,17 @@ export function TaskBoard() {
   const [prioFilter, setPrioFilter] = useState("All Priorities");
   const [showCatDD, setShowCatDD] = useState(false);
   const [showPrioDD, setShowPrioDD] = useState(false);
-  useEffect(() => { setTasks(loadTasks()); setHydrated(true); }, []);
+  const [userEmail, setUserEmail] = useState<string>("");
+
+  useEffect(() => {
+    setTasks(loadTasks());
+    setHydrated(true);
+    // Fetch the current user's email for delete notifications
+    fetch("/api/profile")
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { email?: string } | null) => { if (data?.email) setUserEmail(data.email); })
+      .catch(() => { /* silent — email notifications are best-effort */ });
+  }, []);
 
   const update = useCallback((fn: (prev: Task[]) => Task[]) => {
     setTasks(prev => { const next = fn(prev); saveTasks(next); return next; });
@@ -232,7 +371,26 @@ export function TaskBoard() {
   function onDelete(id: string) {
     const t = tasks.find(x => x.id === id);
     update(prev => prev.filter(t => t.id !== id));
-    if (t) appendActivity("Task Deleted", `Deleted: ${t.title}`);
+    if (t) {
+      appendActivity("Task Deleted", `Deleted: ${t.title}`);
+      // Fire delete notification email — best-effort, never blocks the UI
+      if (userEmail) {
+        fetch("/api/tasks/delete-notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: userEmail,
+            task: {
+              title: t.title,
+              category: t.category,
+              priority: t.priority,
+              deadline: t.deadline,
+              status: t.status,
+            },
+          }),
+        }).catch(() => { /* silent */ });
+      }
+    }
   }
 
   const today = useMemo(() => new Date(MODULE_NOW).toISOString().slice(0, 10), []);
@@ -634,6 +792,10 @@ export function TaskBoard() {
         .tb-row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
         .tb-field .tb-input[type=date], .tb-field .tb-input[type=time] { color:var(--foreground); }
         select.tb-input { appearance:none; cursor:pointer; }
+
+        /* AI scan button spin animation */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .tb-scan-btn:hover:not(:disabled) { border-color:var(--primary) !important; color:var(--primary) !important; }
       `}</style>
     </>
   );

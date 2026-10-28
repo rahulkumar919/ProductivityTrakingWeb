@@ -3,15 +3,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { auth } from "@/lib/next-auth";
 import { connectToDatabase } from "@/lib/db";
 import { StudyPdf } from "@/models";
-import cloudinary from "cloudinary";
-import { env } from "@/lib/env";
-
-cloudinary.v2.config({
-    cloud_name: env.cloudinaryCloudName,
-    api_key: env.cloudinaryApiKey,
-    api_secret: env.cloudinaryApiSecret,
-    secure: true,
-});
 
 async function resolveUserId(): Promise<string | null> {
     const jwtUser = await getCurrentUser();
@@ -32,45 +23,34 @@ export async function GET() {
     return NextResponse.json(pdfs);
 }
 
-/* POST — upload new PDF (base64) */
+/* POST — save PDF metadata after client-side Cloudinary upload */
 export async function POST(request: Request) {
     const userId = await resolveUserId();
     if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!env.cloudinaryCloudName || !env.cloudinaryApiKey || !env.cloudinaryApiSecret) {
-        return NextResponse.json({ error: "Cloudinary not configured" }, { status: 503 });
-    }
-
     const body = await request.json() as {
         title: string;
         category: string;
-        data: string;        // base64 data URL
+        pdfUrl: string;      // secure_url from Cloudinary (uploaded by browser)
+        publicId: string;    // public_id from Cloudinary
         fileSize: number;
         totalPages: number;
     };
 
-    if (!body.data || !body.title) {
-        return NextResponse.json({ error: "title and data required" }, { status: 400 });
+    if (!body.pdfUrl || !body.publicId || !body.title) {
+        return NextResponse.json({ error: "title, pdfUrl, and publicId are required" }, { status: 400 });
     }
 
     await connectToDatabase();
     const count = await StudyPdf.countDocuments({ userId });
     const color = COLORS[count % COLORS.length];
 
-    // Upload PDF to Cloudinary as raw file
-    const result = await cloudinary.v2.uploader.upload(body.data, {
-        folder: "devtrack/study-pdfs",
-        resource_type: "raw",
-        format: "pdf",
-    });
-
     const pdf = await StudyPdf.create({
         userId,
         title: body.title,
         category: body.category || "General",
-        pdfUrl: result.secure_url,
-        publicId: result.public_id,
-        pdfData: body.data,          // save base64 for direct proxy serving
+        pdfUrl: body.pdfUrl,
+        publicId: body.publicId,
         fileSize: body.fileSize,
         totalPages: body.totalPages || 1,
         lastPage: 1,
