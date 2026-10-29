@@ -1,18 +1,93 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+   DESIGN TOKENS  — Light (neumorphism white-minimal)
+───────────────────────────────────────────────────────────── */
 :root {
-  --background: #f7f7f2;
+  /* Base palette */
+  --background: #f0f2ef;
   --foreground: #171915;
-  --card: #ffffff;
-  --muted: #eef0e7;
-  --muted-foreground: #62685d;
-  --border: #dfe4d6;
+  --card: #f5f7f4;
+  --muted: #e8ebe4;
+  --muted-foreground: #6b7468;
+  --border: #dde1d8;
   --primary: #16614f;
   --primary-foreground: #ffffff;
   --accent: #d9603d;
   --ring: #2f8f77;
+
+  /* Neumorphism shadows — light mode */
+  --neu-bg: #f0f2ef;
+  --neu-shadow-light: #ffffff;
+  --neu-shadow-dark: #c8ccc5;
+  --neu-raised: 6px 6px 14px var(--neu-shadow-dark),
+    -6px -6px 14px var(--neu-shadow-light);
+  --neu-raised-sm: 3px 3px 8px var(--neu-shadow-dark),
+    -3px -3px 8px var(--neu-shadow-light);
+  --neu-inset: inset 3px 3px 8px var(--neu-shadow-dark),
+    inset -3px -3px 8px var(--neu-shadow-light);
+  --neu-pressed: inset 4px 4px 10px var(--neu-shadow-dark),
+    inset -2px -2px 6px var(--neu-shadow-light);
+
+  /* Card elevation */
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06),
+    0 4px 16px rgba(0, 0, 0, 0.04);
+  --card-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.10),
+    0 8px 28px rgba(0, 0, 0, 0.07);
+
+  /* Radii */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 30px;
+
+  /* Mobile safe areas */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Bottom nav height (used by layout to add padding) */
+  --bottom-nav-h: 64px;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   DARK MODE TOKENS
+───────────────────────────────────────────────────────────── */
+.dark {
+  --background: #131610;
+  --foreground: #edf2eb;
+  --card: #1a1f18;
+  --muted: #21271e;
+  --muted-foreground: #8a9484;
+  --border: #2a3126;
+  --primary: #5ec4a8;
+  --primary-foreground: #07110e;
+  --accent: #f18b67;
+  --ring: #74d2bb;
+
+  /* Neumorphism shadows — dark mode */
+  --neu-bg: #131610;
+  --neu-shadow-light: #1e2419;
+  --neu-shadow-dark: #0a0d08;
+  --neu-raised: 6px 6px 14px var(--neu-shadow-dark),
+    -6px -6px 14px var(--neu-shadow-light);
+  --neu-raised-sm: 3px 3px 8px var(--neu-shadow-dark),
+    -3px -3px 8px var(--neu-shadow-light);
+  --neu-inset: inset 3px 3px 8px var(--neu-shadow-dark),
+    inset -3px -3px 8px var(--neu-shadow-light);
+  --neu-pressed: inset 4px 4px 10px var(--neu-shadow-dark),
+    inset -2px -2px 6px var(--neu-shadow-light);
+
+  --card-shadow: 0 1px 4px rgba(0, 0, 0, 0.4),
+    0 4px 16px rgba(0, 0, 0, 0.3);
+  --card-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.5),
+    0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   TAILWIND v4 THEME MAPPING
+───────────────────────────────────────────────────────────── */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -28,37 +103,265 @@
   --font-mono: var(--font-geist-mono);
 }
 
-.dark {
-  --background: #10120f;
-  --foreground: #f5f7f0;
-  --card: #181b16;
-  --muted: #22271f;
-  --muted-foreground: #aeb7a7;
-  --border: #30372c;
-  --primary: #5ec4a8;
-  --primary-foreground: #07110e;
-  --accent: #f18b67;
-  --ring: #74d2bb;
+/* ─────────────────────────────────────────────────────────────
+   GLOBAL RESETS & BASE
+───────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  border-color: var(--border);
+  box-sizing: border-box;
 }
 
-* {
-  border-color: var(--border);
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* prevent overscroll bounce on iOS */
+  overscroll-behavior: none;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   SMOOTH TRANSITIONS
+───────────────────────────────────────────────────────────── */
 button,
 a,
 input,
 select,
 textarea {
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   SCROLLBAR — thin & styled
+───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SELECTION
+───────────────────────────────────────────────────────────── */
 ::selection {
-  background: color-mix(in srgb, var(--primary) 26%, transparent);
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   UTILITY CLASSES — Neumorphism helpers
+───────────────────────────────────────────────────────────── */
+
+/* Raised card — sits above the surface */
+.neu-card {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--neu-raised);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  transition: box-shadow 220ms ease, transform 180ms ease;
+}
+
+.dark .neu-card {
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.neu-card:hover {
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-1px);
+}
+
+/* Flat card — subtle elevation */
+.neu-flat {
+  background: var(--card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--border);
+  transition: box-shadow 220ms ease, transform 180ms ease;
+}
+
+.neu-flat:hover {
+  box-shadow: var(--card-shadow-hover);
+}
+
+/* Inset / pressed well */
+.neu-inset {
+  background: var(--neu-bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--neu-inset);
+}
+
+/* Pill button base */
+.neu-btn {
+  background: var(--card);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--neu-raised-sm);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: box-shadow 150ms ease, transform 120ms ease;
+}
+
+.dark .neu-btn {
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.neu-btn:hover {
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-1px);
+}
+
+.neu-btn:active {
+  box-shadow: var(--neu-pressed);
+  transform: translateY(0);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MOBILE LAYOUT HELPERS
+───────────────────────────────────────────────────────────── */
+
+/* Bottom-nav safe padding — applied to main content on mobile */
+.mobile-pb {
+  padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 16px);
+}
+
+@media (min-width: 1024px) {
+  .mobile-pb {
+    padding-bottom: 24px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PAGE HEADER — consistent across all pages
+───────────────────────────────────────────────────────────── */
+.page-header-title {
+  font-size: clamp(1.35rem, 4vw, 1.9rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--foreground);
+}
+
+.page-header-desc {
+  font-size: 0.82rem;
+  color: var(--muted-foreground);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   FOCUS RING — accessibility
+───────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ANIMATIONS
+───────────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 40%, transparent);
+  }
+
+  70% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.35s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.28s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+}
+
+.animate-slide-left {
+  animation: slideInLeft 0.3s cubic-bezier(0.34, 1.2, 0.64, 1) both;
 }

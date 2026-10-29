@@ -7,8 +7,10 @@ export const env = {
   mongodbUri: optionalEnv("MONGODB_URI"),
   mongodbDb: optionalEnv("MONGODB_DB") ?? "devtrack_ai",
   jwtSecret: optionalEnv("JWT_SECRET") ?? "devtrack-local-secret-change-me",
-  geminiApiKey: optionalEnv("GEMINI_API_KEY"),
+  geminiApiKey: optionalEnv("GEMINI_API_KEY"),   // kept for backward compat, not used by any route
   geminiModel: optionalEnv("GEMINI_MODEL") ?? "gemini-2.0-flash",
+  groqApiKey: optionalEnv("GROQ_API_KEY"),      // ALL AI features — insights + image scan
+  groqModel: optionalEnv("GROQ_MODEL") ?? "llama-3.3-70b-versatile",
   smtpHost: optionalEnv("SMTP_HOST"),
   smtpPort: Number(optionalEnv("SMTP_PORT") ?? 587),
   smtpUser: optionalEnv("SMTP_USER"),

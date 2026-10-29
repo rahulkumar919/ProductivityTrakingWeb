@@ -1,12 +1,98 @@
 {
   "name": "DevTrack AI",
   "short_name": "DevTrack",
-  "description": "Personal daily routine and productivity tracker.",
+  "description": "Your personal discipline OS — tasks, habits, goals, focus timer, AI insights and more.",
   "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f7f7f2",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "portrait-primary",
+  "background_color": "#f0f2ef",
   "theme_color": "#16614f",
+  "lang": "en",
+  "categories": [
+    "productivity",
+    "education",
+    "lifestyle"
+  ],
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
-  ]
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Task",
+      "short_name": "Task",
+      "description": "Go straight to your task board",
+      "url": "/tasks",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "Focus Timer",
+      "short_name": "Timer",
+      "description": "Start a focus session",
+      "url": "/timer",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "Habits",
+      "short_name": "Habits",
+      "description": "Track your daily habits",
+      "url": "/habits",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "AI Insights",
+      "short_name": "AI",
+      "description": "Get AI-powered productivity insights",
+      "url": "/ai-insights",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "label": "DevTrack AI Dashboard on mobile"
+    }
+  ],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
 }

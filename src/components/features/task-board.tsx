@@ -65,7 +65,6 @@ function AddTaskModal({ onAdd, onClose }: { onAdd: (t: Task) => void; onClose: (
   // AI image scan state
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
-  const [scanSuccess, setScanSuccess] = useState(false);
   const imgInputRef = useRef<HTMLInputElement>(null);
 
   function submit(e: React.FormEvent) {
@@ -79,10 +78,9 @@ function AddTaskModal({ onAdd, onClose }: { onAdd: (t: Task) => void; onClose: (
     if (!file.type.startsWith("image/")) { setScanError("Please upload an image file."); return; }
     if (file.size > 3 * 1024 * 1024) { setScanError("Image must be under 3 MB for AI scan."); return; }
 
-    setScanning(true); setScanError(""); setScanSuccess(false);
+    setScanning(true); setScanError("");
 
     try {
-      // Convert image to base64
       const base64 = await new Promise<string>((res, rej) => {
         const reader = new FileReader();
         reader.onload = () => res(reader.result as string);
@@ -106,19 +104,25 @@ function AddTaskModal({ onAdd, onClose }: { onAdd: (t: Task) => void; onClose: (
         error?: string;
       };
       if (!response.ok) throw new Error(data.error ?? "Scan failed");
+      if (!data.title) throw new Error("AI could not detect a task in this image.");
 
-      // Auto-fill form fields — only overwrite if Gemini returned a value
-      if (data.title) setTitle(data.title);
-      if (data.description) setDesc(data.description);
-      if (data.category) setCat(data.category as Category);
-      if (data.priority) setPriority(data.priority as Priority);
-      if (data.deadline) setDeadline(data.deadline);
-      setScanSuccess(true);
+      // ── AUTO-CREATE: immediately add the task and close ──────────
+      onAdd({
+        id: crypto.randomUUID(),
+        title: data.title,
+        description: data.description ?? "",
+        category: (data.category ?? "Other") as Category,
+        priority: (data.priority ?? "Medium") as Priority,
+        deadline: data.deadline ?? new Date().toISOString().slice(0, 10),
+        status: "Todo",
+      });
+      onClose();
+
     } catch (err) {
+      // Scan failed — fall back to the form so the user can fix it manually
       setScanError(err instanceof Error ? err.message : "Scan failed. Please fill in manually.");
     } finally {
       setScanning(false);
-      // Reset the file input so the same file can be re-selected
       if (imgInputRef.current) imgInputRef.current.value = "";
     }
   }
@@ -126,104 +130,151 @@ function AddTaskModal({ onAdd, onClose }: { onAdd: (t: Task) => void; onClose: (
   return (
     <div className="tb-overlay" onClick={onClose}>
       <div className="tb-modal" onClick={e => e.stopPropagation()}>
+
+        {/* ── Scanning overlay — shown while AI is working ── */}
+        {scanning && (
+          <div style={{
+            position: "absolute", inset: 0, zIndex: 10,
+            background: "rgba(var(--card-rgb, 255,255,255), 0.92)",
+            backdropFilter: "blur(4px)",
+            borderRadius: "inherit",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: 14,
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: "50%",
+              background: "linear-gradient(135deg,rgba(22,97,79,.15),rgba(22,97,79,.05))",
+              border: "2px solid rgba(22,97,79,.2)",
+              display: "grid", placeItems: "center",
+            }}>
+              <Loader2 size={26} style={{ color: "var(--primary)", animation: "spin 1s linear infinite" }} />
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ margin: 0, fontSize: "0.92rem", fontWeight: 800, color: "var(--foreground)" }}>
+                Scanning image…
+              </p>
+              <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "var(--muted-foreground)" }}>
+                AI is detecting your task
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="tb-modal-hd">
           <div>
             <h2 className="tb-modal-title">Add New Task</h2>
             <p className="tb-modal-sub">Plan, prioritize, execute.</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {/* AI scan button */}
+            {/* Hidden file input */}
             <input
               ref={imgInputRef}
               type="file"
               accept="image/*"
-              className="hidden"
               style={{ display: "none" }}
               onChange={e => { const f = e.target.files?.[0]; if (f) void handleImageScan(f); }}
             />
+            {/* AI scan button */}
             <button
               type="button"
               onClick={() => imgInputRef.current?.click()}
               disabled={scanning}
-              title="Scan image to auto-fill task"
-              className="tb-scan-btn"
+              title="Scan an image — AI will automatically create the task"
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 height: 34, padding: "0 12px", borderRadius: 10,
                 border: "1.5px solid var(--border)",
-                background: scanSuccess ? "rgba(34,197,94,0.08)" : "var(--muted)",
-                color: scanSuccess ? "#22c55e" : "var(--muted-foreground)",
-                fontSize: "0.78rem", fontWeight: 700, cursor: scanning ? "not-allowed" : "pointer",
-                transition: "all .15s", opacity: scanning ? 0.7 : 1,
+                background: "var(--muted)",
+                color: "var(--muted-foreground)",
+                fontSize: "0.78rem", fontWeight: 700,
+                cursor: scanning ? "not-allowed" : "pointer",
+                transition: "all .15s", opacity: scanning ? 0.5 : 1,
+                whiteSpace: "nowrap",
               }}
             >
-              {scanning
-                ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Scanning…</>
-                : scanSuccess
-                  ? <><Sparkles size={13} /> Filled!</>
-                  : <><ImagePlus size={13} /> Scan Image</>
-              }
+              <Sparkles size={13} style={{ color: "var(--primary)" }} />
+              Scan Image
             </button>
             <button onClick={onClose} className="tb-icon-btn"><X size={18} /></button>
           </div>
         </div>
 
-        {/* Scan status messages */}
+        {/* Scan error */}
         {scanError && (
-          <div style={{ margin: "0 22px", padding: "8px 12px", borderRadius: 8, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
-            <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, color: "#ef4444" }}>⚠️ {scanError}</p>
-          </div>
-        )}
-        {scanSuccess && (
-          <div style={{ margin: "0 22px", padding: "8px 12px", borderRadius: 8, background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)" }}>
-            <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, color: "#22c55e" }}>✓ Task auto-filled from image — review and adjust below.</p>
+          <div style={{ margin: "0 22px 4px", padding: "9px 13px", borderRadius: 10, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)" }}>
+            <p style={{ margin: 0, fontSize: "0.78rem", fontWeight: 600, color: "#ef4444" }}>
+              ⚠️ {scanError}
+            </p>
           </div>
         )}
 
-        {/* Scan drop zone hint when no title yet */}
-        {!title && !scanning && (
+        {/* AI scan drop-zone — always visible when form is empty */}
+        {!scanning && (
           <div
             onClick={() => imgInputRef.current?.click()}
             style={{
-              margin: "0 22px", padding: "14px 16px", borderRadius: 12,
+              margin: "0 22px 2px", padding: "13px 16px", borderRadius: 12,
               border: "1.5px dashed var(--border)", background: "var(--muted)",
-              cursor: "pointer", textAlign: "center", transition: "border-color .15s",
+              cursor: "pointer", textAlign: "center", transition: "border-color .18s, background .18s",
             }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--primary)")}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLDivElement).style.borderColor = "var(--primary)";
+              (e.currentTarget as HTMLDivElement).style.background = "rgba(22,97,79,0.05)";
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border)";
+              (e.currentTarget as HTMLDivElement).style.background = "var(--muted)";
+            }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--muted-foreground)" }}>
-              <Sparkles size={15} style={{ color: "var(--primary)" }} />
-              <span style={{ fontSize: "0.82rem", fontWeight: 700 }}>
-                Drop or click to scan an image — AI will auto-fill your task
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+              <ImagePlus size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
+              <span style={{ fontSize: "0.81rem", fontWeight: 700, color: "var(--foreground)" }}>
+                Tap to scan — AI creates the task automatically
               </span>
             </div>
-            <p style={{ margin: "4px 0 0", fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
-              Screenshot, assignment sheet, handwritten note — max 3 MB
+            <p style={{ margin: "3px 0 0", fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
+              Screenshot · assignment · handwritten note · max 3 MB
             </p>
           </div>
         )}
 
         <form onSubmit={submit} className="tb-modal-body">
-          <div className="tb-field"><label className="tb-label">Task Title *</label>
-            <input className="tb-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Build AI Agent (MCP Server)" required autoFocus /></div>
-          <div className="tb-field"><label className="tb-label">Description</label>
-            <textarea className="tb-input tb-ta" value={desc} onChange={e => setDesc(e.target.value)} placeholder="What needs to happen?" rows={2} /></div>
-          <div className="tb-row2">
-            <div className="tb-field"><label className="tb-label">Category</label>
-              <select className="tb-input" value={cat} onChange={e => setCat(e.target.value as Category)}>
-                <option>Coding</option><option>Study</option><option>College</option><option>Gym</option><option>Personal</option><option>Other</option>
-              </select></div>
-            <div className="tb-field"><label className="tb-label">Priority</label>
-              <select className="tb-input" value={priority} onChange={e => setPriority(e.target.value as Priority)}>
-                <option>High</option><option>Medium</option><option>Low</option>
-              </select></div>
+          <div className="tb-field">
+            <label className="tb-label">Task Title *</label>
+            <input className="tb-input" value={title} onChange={e => setTitle(e.target.value)}
+              placeholder="e.g. Build AI Agent (MCP Server)" required autoFocus />
+          </div>
+          <div className="tb-field">
+            <label className="tb-label">Description</label>
+            <textarea className="tb-input tb-ta" value={desc} onChange={e => setDesc(e.target.value)}
+              placeholder="What needs to happen?" rows={2} />
           </div>
           <div className="tb-row2">
-            <div className="tb-field"><label className="tb-label">Deadline *</label>
-              <input className="tb-input" type="date" value={deadline} onChange={e => setDeadline(e.target.value)} required /></div>
-            <div className="tb-field"><label className="tb-label">Time</label>
-              <input className="tb-input" type="time" value={time} onChange={e => setTime(e.target.value)} /></div>
+            <div className="tb-field">
+              <label className="tb-label">Category</label>
+              <select className="tb-input" value={cat} onChange={e => setCat(e.target.value as Category)}>
+                <option>Coding</option><option>Study</option><option>College</option>
+                <option>Gym</option><option>Personal</option><option>Other</option>
+              </select>
+            </div>
+            <div className="tb-field">
+              <label className="tb-label">Priority</label>
+              <select className="tb-input" value={priority} onChange={e => setPriority(e.target.value as Priority)}>
+                <option>High</option><option>Medium</option><option>Low</option>
+              </select>
+            </div>
+          </div>
+          <div className="tb-row2">
+            <div className="tb-field">
+              <label className="tb-label">Deadline *</label>
+              <input className="tb-input" type="date" value={deadline}
+                onChange={e => setDeadline(e.target.value)} required />
+            </div>
+            <div className="tb-field">
+              <label className="tb-label">Time</label>
+              <input className="tb-input" type="time" value={time}
+                onChange={e => setTime(e.target.value)} />
+            </div>
           </div>
           <div className="tb-modal-ft">
             <button type="button" onClick={onClose} className="tb-btn-ghost">Cancel</button>
@@ -342,13 +393,48 @@ export function TaskBoard() {
   const [userEmail, setUserEmail] = useState<string>("");
 
   useEffect(() => {
-    setTasks(loadTasks());
+    const loaded = loadTasks();
+    setTasks(loaded);
     setHydrated(true);
+
     // Fetch the current user's email for delete notifications
     fetch("/api/profile")
       .then(r => r.ok ? r.json() : null)
       .then((data: { email?: string } | null) => { if (data?.email) setUserEmail(data.email); })
-      .catch(() => { /* silent — email notifications are best-effort */ });
+      .catch(() => { /* silent */ });
+
+    // ── Auto deadline check — fires once per 24h per device ──────────
+    const COOLDOWN_KEY = "devtrack_deadline_check_ts";
+    const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+    try {
+      const last = Number(localStorage.getItem(COOLDOWN_KEY) ?? "0");
+      if (Date.now() - last < COOLDOWN_MS) return; // already checked today
+    } catch { return; }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const overdueTasks = loaded.filter(
+      t => t.deadline < today && t.status !== "Completed"
+    );
+
+    if (overdueTasks.length === 0) return; // nothing to report
+
+    // Mark the check time first so a quick double-mount doesn't double-send
+    try { localStorage.setItem(COOLDOWN_KEY, String(Date.now())); } catch { /* ignore */ }
+
+    fetch("/api/tasks/deadline-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tasks: overdueTasks.map(t => ({
+          id: t.id,
+          title: t.title,
+          category: t.category,
+          priority: t.priority,
+          deadline: t.deadline,
+          status: t.status,
+        })),
+      }),
+    }).catch(() => { /* silent — notification is best-effort */ });
   }, []);
 
   const update = useCallback((fn: (prev: Task[]) => Task[]) => {
