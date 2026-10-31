@@ -1,7 +1,7 @@
 "use client";
 
 import {
-    BookMarked, BookOpen, ChevronLeft, ChevronRight,
+    BookMarked, BookOpen, ChevronLeft, ChevronRight, Download, ExternalLink,
     FileText, Loader2, Maximize2, Minimize2, Plus,
     Search, StickyNote, Trash2, Upload, X, ZoomIn, ZoomOut,
 } from "lucide-react";
@@ -29,7 +29,7 @@ const CATEGORIES = [
 ];
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#14b8a6", "#ec4899", "#8b5cf6", "#f97316"];
 
-/* ─── Local PDF cache cleanup helpers ───────────────────────────── */
+/* ─── Helpers ───────────────────────────────────────────────────── */
 function removeCachedPdf(id: string) {
     try { localStorage.removeItem(`sv_pdf_${id}`); } catch { /* ignore */ }
 }
@@ -39,42 +39,9 @@ function fmtSize(b: number) {
     if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
+
 function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-}
-
-/* ─── Cloudinary direct upload ───────────────────────────────────── */
-async function uploadToCloudinary(file: File): Promise<{ secure_url: string; public_id: string }> {
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-    if (!cloudName || !uploadPreset) {
-        throw new Error("Cloudinary is not configured. Please set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET.");
-    }
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", uploadPreset);
-    formData.append("folder", "devtrack/study-pdfs");
-    formData.append("resource_type", "raw");
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`, {
-        method: "POST",
-        body: formData,
-    });
-
-    if (!res.ok) {
-        // Cloudinary returns JSON errors
-        let msg = `Cloudinary upload failed (${res.status})`;
-        try {
-            const err = await res.json() as { error?: { message?: string } };
-            if (err.error?.message) msg = err.error.message;
-        } catch { /* ignore parse error */ }
-        throw new Error(msg);
-    }
-
-    const data = await res.json() as { secure_url: string; public_id: string };
-    return { secure_url: data.secure_url, public_id: data.public_id };
 }
 
 /* ─── Upload Modal ───────────────────────────────────────────────── */
@@ -87,13 +54,18 @@ function UploadModal({ onClose, onUploaded }: {
     const [category, setCategory] = useState("General");
     const [dragging, setDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
-    const [uploadStage, setUploadStage] = useState<"cloudinary" | "saving" | "">("");
     const [error, setError] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
 
     function pickFile(f: File) {
-        if (f.type !== "application/pdf") { setError("Only PDF files are allowed."); return; }
-        if (f.size > 20 * 1024 * 1024) { setError("PDF must be under 20 MB."); return; }
+        if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
+            setError("Only PDF files are allowed.");
+            return;
+        }
+        if (f.size > 25 * 1024 * 1024) {
+            setError("PDF must be under 25 MB.");
+            return;
+        }
         setFile(f);
         if (!title) setTitle(f.name.replace(/\.pdf$/i, ""));
         setError("");
@@ -103,28 +75,25 @@ function UploadModal({ onClose, onUploaded }: {
         e.preventDefault();
         if (!file) { setError("Please select a PDF file."); return; }
         if (!title.trim()) { setError("Please enter a title."); return; }
-        setUploading(true); setError("");
-        try {
-            // Step 1: Upload PDF directly from browser to Cloudinary (bypasses Vercel 4.5MB limit)
-            setUploadStage("cloudinary");
-            const { secure_url, public_id } = await uploadToCloudinary(file);
 
-            // Step 2: Save metadata (URL, title, category) to our API — tiny JSON payload
-            setUploadStage("saving");
-            const res = await fetch("/api/study-pdfs", {
+        setUploading(true);
+        setError("");
+
+        try {
+            // Direct binary stream upload — completely avoids multipart/FormData parsing limits for large files (10MB-50MB+)
+            const uploadUrl = `/api/study-pdfs?title=${encodeURIComponent(title.trim())}&category=${encodeURIComponent(category)}`;
+            const res = await fetch(uploadUrl, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    title: title.trim(),
-                    category,
-                    pdfUrl: secure_url,
-                    publicId: public_id,
-                    fileSize: file.size,
-                    totalPages: 1,
-                }),
+                headers: {
+                    "Content-Type": "application/pdf",
+                    "X-File-Name": encodeURIComponent(file.name),
+                    "X-File-Size": String(file.size),
+                    "X-File-Title": encodeURIComponent(title.trim()),
+                    "X-File-Category": encodeURIComponent(category),
+                },
+                body: file,
             });
 
-            // Gracefully handle non-JSON error responses (e.g. 413, 502, Vercel errors)
             let json: Record<string, unknown>;
             const contentType = res.headers.get("content-type") ?? "";
             if (contentType.includes("application/json")) {
@@ -135,7 +104,9 @@ function UploadModal({ onClose, onUploaded }: {
                 throw new Error("Unexpected response from server.");
             }
 
-            if (!res.ok) throw new Error((json.error as string) ?? "Upload failed");
+            if (!res.ok) {
+                throw new Error((json.error as string) ?? "Upload failed");
+            }
 
             onUploaded(json as unknown as PDFDoc);
             onClose();
@@ -143,15 +114,8 @@ function UploadModal({ onClose, onUploaded }: {
             setError(err instanceof Error ? err.message : "Upload failed. Try again.");
         } finally {
             setUploading(false);
-            setUploadStage("");
         }
     }
-
-    const uploadLabel = uploadStage === "cloudinary"
-        ? "Uploading to cloud…"
-        : uploadStage === "saving"
-            ? "Saving…"
-            : "Uploading…";
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center"
@@ -164,7 +128,7 @@ function UploadModal({ onClose, onUploaded }: {
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h2 className="text-lg font-black" style={{ color: "var(--foreground)" }}>Upload PDF</h2>
-                        <p className="text-sm mt-0.5" style={{ color: "var(--muted-foreground)" }}>Save permanently to your vault</p>
+                        <p className="text-sm mt-0.5" style={{ color: "var(--muted-foreground)" }}>Saved permanently in your MongoDB Database</p>
                     </div>
                     <button onClick={onClose} className="rounded-xl p-2 hover:bg-muted transition-colors">
                         <X size={18} style={{ color: "var(--muted-foreground)" }} />
@@ -188,8 +152,8 @@ function UploadModal({ onClose, onUploaded }: {
                                 <div className="flex size-12 items-center justify-center rounded-2xl" style={{ background: "rgba(22,97,79,0.12)" }}>
                                     <FileText size={22} style={{ color: "var(--primary)" }} />
                                 </div>
-                                <div>
-                                    <p className="font-bold text-sm" style={{ color: "var(--foreground)" }}>{file.name}</p>
+                                <div className="min-w-0 flex-1">
+                                    <p className="font-bold text-sm truncate" style={{ color: "var(--foreground)" }}>{file.name}</p>
                                     <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>{fmtSize(file.size)}</p>
                                 </div>
                             </div>
@@ -199,7 +163,7 @@ function UploadModal({ onClose, onUploaded }: {
                                     <Upload size={24} style={{ color: "var(--primary)" }} />
                                 </div>
                                 <p className="font-bold text-sm" style={{ color: "var(--foreground)" }}>{dragging ? "Drop it here!" : "Click or drag & drop"}</p>
-                                <p className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>PDF only · Max 20 MB</p>
+                                <p className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>PDF only · Max 25 MB</p>
                             </div>
                         )}
                     </div>
@@ -226,7 +190,7 @@ function UploadModal({ onClose, onUploaded }: {
                             style={{ background: "var(--muted)", color: "var(--foreground)" }}>Cancel</button>
                         <button type="submit" disabled={uploading} className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black"
                             style={{ background: uploading ? "var(--muted)" : "linear-gradient(135deg,#16614f,#5ec4a8)", color: uploading ? "var(--muted-foreground)" : "#fff" }}>
-                            {uploading ? <><Loader2 size={16} className="animate-spin" /> {uploadLabel}</> : <><Upload size={15} /> Upload & Save</>}
+                            {uploading ? <><Loader2 size={16} className="animate-spin" /> Saving to Database…</> : <><Upload size={15} /> Upload & Save</>}
                         </button>
                     </div>
                 </form>
@@ -250,6 +214,9 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
     const [noteText, setNoteText] = useState("");
     const [addingNote, setAddingNote] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [iframeError, setIframeError] = useState(false);
+
+    // Direct endpoint streaming from MongoDB database
     const proxyUrl = `/api/study-pdfs/${doc._id}/proxy`;
     const iframeSrc = `${proxyUrl}#page=${page}`;
 
@@ -267,8 +234,7 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
 
     useEffect(() => { onProgress(doc._id, page); }, [page, doc._id, onProgress]);
 
-    // Reset loading state on page change
-    useEffect(() => { setLoading(true); }, [page]);
+    useEffect(() => { setLoading(true); setIframeError(false); }, [page]);
 
     const pageNotes = doc.notes.filter(n => n.page === page);
     const pct = Math.round((page / doc.totalPages) * 100);
@@ -281,16 +247,16 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#0a0f0d" }}>
+        <div className="fixed inset-0 z-50 flex flex-col h-[100dvh] w-full overflow-hidden" style={{ background: "#0a0f0d" }}>
             {/* ── Top Bar ── */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0"
+            <div className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 border-b shrink-0 h-12"
                 style={{ borderColor: "rgba(255,255,255,0.08)", background: "#0d1610" }}>
-                {/* Title + progress */}
-                <div className="flex items-center gap-3 flex-1 min-w-0">
+                {/* Title + progress (desktop / tablet) */}
+                <div className="hidden sm:flex items-center gap-3 flex-1 min-w-0">
                     <div className="flex size-8 items-center justify-center rounded-xl shrink-0" style={{ background: `${doc.color}22` }}>
                         <FileText size={15} style={{ color: doc.color }} />
                     </div>
-                    <div className="min-w-0 hidden sm:block">
+                    <div className="min-w-0">
                         <p className="font-black text-sm text-white truncate leading-tight">{doc.title}</p>
                         <div className="flex items-center gap-2 mt-0.5">
                             <div className="w-20 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
@@ -302,13 +268,12 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                 </div>
 
                 {/* Page navigation */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                     <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-30 transition-all"
-                        style={{ color: "#fff" }}>
+                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-30 transition-all text-white">
                         <ChevronLeft size={16} />
                     </button>
-                    <div className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm"
+                    <div className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs sm:text-sm"
                         style={{ background: "rgba(255,255,255,0.08)" }}>
                         <input
                             type="number" min={1} max={doc.totalPages} value={page}
@@ -316,108 +281,190 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                                 const v = Math.max(1, Math.min(doc.totalPages, Number(e.target.value)));
                                 if (!isNaN(v)) setPage(v);
                             }}
-                            className="w-9 bg-transparent text-center font-black text-white outline-none"
+                            className="w-8 sm:w-9 bg-transparent text-center font-black text-white outline-none"
                             style={{ fontSize: "0.85rem" }}
                         />
-                        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem" }}>/ {doc.totalPages}</span>
+                        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.75rem" }}>/ {doc.totalPages}</span>
                     </div>
                     <button onClick={() => setPage(p => Math.min(doc.totalPages, p + 1))} disabled={page >= doc.totalPages}
-                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-30 transition-all"
-                        style={{ color: "#fff" }}>
+                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-30 transition-all text-white">
                         <ChevronRight size={16} />
                     </button>
                 </div>
 
-                {/* Zoom */}
+                {/* Zoom (desktop only) */}
                 <div className="hidden md:flex items-center gap-1.5 rounded-lg px-2 py-1" style={{ background: "rgba(255,255,255,0.06)" }}>
                     <button onClick={() => setZoom(z => Math.max(50, z - 10))}
-                        className="flex size-7 items-center justify-center rounded hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
+                        className="flex size-7 items-center justify-center rounded hover:bg-white/10 transition-all text-white">
                         <ZoomOut size={14} />
                     </button>
                     <button onClick={() => setZoom(100)}
                         className="text-xs font-bold w-10 text-center hover:text-white transition-colors"
                         style={{ color: "rgba(255,255,255,0.6)" }}>{zoom}%</button>
                     <button onClick={() => setZoom(z => Math.min(200, z + 10))}
-                        className="flex size-7 items-center justify-center rounded hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
+                        className="flex size-7 items-center justify-center rounded hover:bg-white/10 transition-all text-white">
                         <ZoomIn size={14} />
                     </button>
                 </div>
 
-                {/* Notes toggle */}
-                <button onClick={() => setShowNotes(v => !v)}
-                    className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-black transition-all"
-                    style={{
-                        background: showNotes ? `${doc.color}22` : "rgba(255,255,255,0.07)",
-                        color: showNotes ? doc.color : "rgba(255,255,255,0.7)",
-                        border: `1.5px solid ${showNotes ? doc.color + "50" : "transparent"}`,
-                    }}>
-                    <StickyNote size={13} />
-                    <span className="hidden sm:inline">Notes</span>
-                    {doc.notes.length > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5 text-xs font-black" style={{ background: doc.color, color: "#fff", fontSize: "0.65rem" }}>
-                            {doc.notes.length}
-                        </span>
-                    )}
-                </button>
+                <div className="flex items-center gap-1 ml-auto">
+                    {/* Notes toggle */}
+                    <button onClick={() => setShowNotes(v => !v)}
+                        className="flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs font-black transition-all"
+                        style={{
+                            background: showNotes ? `${doc.color}22` : "rgba(255,255,255,0.07)",
+                            color: showNotes ? doc.color : "rgba(255,255,255,0.7)",
+                            border: `1.5px solid ${showNotes ? doc.color + "50" : "transparent"}`,
+                        }}>
+                        <StickyNote size={14} />
+                        <span className="hidden sm:inline">Notes</span>
+                        {doc.notes.length > 0 && (
+                            <span className="rounded-full px-1.5 py-0.2 text-xs font-black" style={{ background: doc.color, color: "#fff", fontSize: "0.65rem" }}>
+                                {doc.notes.length}
+                            </span>
+                        )}
+                    </button>
 
-                {/* Fullscreen */}
-                <button onClick={() => setFullscreen(v => !v)}
-                    className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
-                    {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-                </button>
+                    {/* Open in new tab / window */}
+                    <a
+                        href={proxyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open PDF in new tab"
+                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all text-white"
+                    >
+                        <ExternalLink size={15} />
+                    </a>
 
-                {/* Close */}
-                <button onClick={onClose}
-                    className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all" style={{ color: "#fff" }}>
-                    <X size={16} />
-                </button>
+                    {/* Download PDF directly */}
+                    <a
+                        href={proxyUrl}
+                        download={`${doc.title}.pdf`}
+                        title="Download PDF"
+                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all text-white"
+                    >
+                        <Download size={15} />
+                    </a>
+
+                    {/* Fullscreen (desktop only) */}
+                    <button onClick={() => setFullscreen(v => !v)}
+                        className="hidden sm:flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all text-white">
+                        {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+                    </button>
+
+                    {/* Close */}
+                    <button onClick={onClose}
+                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all text-white">
+                        <X size={16} />
+                    </button>
+                </div>
             </div>
 
-            {/* ── Main Content ── */}
-            <div className="flex flex-1 overflow-hidden">
-                {/* PDF Area */}
-                <div className="flex-1 relative overflow-auto flex items-start justify-center"
-                    style={{ background: "#141a16", padding: fullscreen ? "0" : "1rem" }}>
-
+            {/* ── Main Content Area ── */}
+            <div className="flex flex-1 min-h-0 w-full overflow-hidden relative">
+                {/* PDF Area: single scrollable container filling 100% space without nested clipping */}
+                <div
+                    className="flex-1 min-h-0 h-full w-full relative flex flex-col items-center justify-center overflow-hidden"
+                    style={{
+                        background: "#141a16",
+                        padding: 0,
+                    }}
+                >
                     {/* Loading spinner overlay */}
                     {loading && (
                         <div className="absolute inset-0 flex items-center justify-center z-10"
                             style={{ background: "rgba(10,15,13,0.85)" }}>
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 size={36} className="animate-spin" style={{ color: doc.color }} />
-                                <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>Loading PDF…</p>
+                                <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>Loading PDF from Database…</p>
                             </div>
                         </div>
                     )}
 
-                    {/* The PDF iframe — uses our proxy to bypass Cloudinary CORS */}
-                    <div style={{
-                        transform: `scale(${zoom / 100})`,
-                        transformOrigin: "top center",
-                        transition: "transform 0.15s ease",
-                        width: "100%",
-                        maxWidth: fullscreen ? "none" : 960,
-                    }}>
-                        <iframe
-                            key={`${doc._id}-${page}`}
-                            src={iframeSrc}
-                            title={doc.title}
-                            onLoad={() => setLoading(false)}
-                            style={{
+                    {/* The PDF iframe - takes 100% of container so internal PDF viewer handles smooth touch & wheel scroll */}
+                    <div
+                        className="w-full h-full flex-1 relative"
+                        style={{
+                            maxWidth: fullscreen ? "none" : 1080,
+                            margin: "0 auto",
+                            transform: zoom !== 100 ? `scale(${zoom / 100})` : "none",
+                            transformOrigin: "top center",
+                            transition: "transform 0.15s ease",
+                        }}
+                    >
+                        {iframeError ? (
+                            /* ── Mobile / blocked iframe fallback: Open or download directly ── */
+                            <div style={{
                                 width: "100%",
-                                height: fullscreen ? "100vh" : "calc(100vh - 130px)",
-                                border: "none",
-                                borderRadius: fullscreen ? 0 : 12,
-                                background: "#fff",
-                                display: "block",
-                            }}
-                        />
+                                height: "100%",
+                                display: "flex", flexDirection: "column",
+                                alignItems: "center", justifyContent: "center", gap: 16,
+                                background: "#0d1610", borderRadius: 0,
+                                padding: 24,
+                            }}>
+                                <div style={{ fontSize: 44 }}>📄</div>
+                                <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#fff", textAlign: "center" }}>
+                                    {doc.title}
+                                </p>
+                                <p style={{ margin: 0, fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", textAlign: "center", maxWidth: 340 }}>
+                                    Document saved in MongoDB. Mobile browsers block inline PDF iframes — click below to view or download:
+                                </p>
+                                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+                                    <a
+                                        href={proxyUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            display: "inline-flex", alignItems: "center", gap: 8,
+                                            padding: "11px 22px", borderRadius: 14,
+                                            background: doc.color, color: "#fff",
+                                            fontWeight: 800, fontSize: "0.88rem",
+                                            textDecoration: "none",
+                                            boxShadow: `0 4px 16px ${doc.color}40`,
+                                        }}
+                                    >
+                                        <ExternalLink size={16} /> Open in Viewer
+                                    </a>
+                                    <a
+                                        href={proxyUrl}
+                                        download={`${doc.title}.pdf`}
+                                        style={{
+                                            display: "inline-flex", alignItems: "center", gap: 8,
+                                            padding: "11px 22px", borderRadius: 14,
+                                            background: "rgba(255,255,255,0.1)", color: "#fff",
+                                            fontWeight: 800, fontSize: "0.88rem",
+                                            textDecoration: "none",
+                                            border: "1px solid rgba(255,255,255,0.2)",
+                                        }}
+                                    >
+                                        <Download size={16} /> Download
+                                    </a>
+                                </div>
+                            </div>
+                        ) : (
+                            <iframe
+                                key={`${doc._id}-${page}`}
+                                src={iframeSrc}
+                                title={doc.title}
+                                onLoad={() => setLoading(false)}
+                                onError={() => { setLoading(false); setIframeError(true); }}
+                                className="w-full h-full block border-none"
+                                style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    border: "none",
+                                    background: "#fff",
+                                    display: "block",
+                                    touchAction: "auto",
+                                }}
+                            />
+                        )}
                     </div>
                 </div>
 
-                {/* ── Notes Sidebar ── */}
+                {/* ── Notes Sidebar (responsive: overlays as a drawer on mobile, splits on desktop) ── */}
                 {showNotes && (
-                    <div className="w-72 xl:w-80 shrink-0 flex flex-col border-l"
+                    <div className="absolute sm:relative inset-y-0 right-0 z-20 w-72 sm:w-80 shrink-0 flex flex-col border-l shadow-2xl sm:shadow-none"
                         style={{ borderColor: "rgba(255,255,255,0.08)", background: "#0d1610" }}>
                         <div className="flex items-center justify-between px-4 py-3 border-b shrink-0"
                             style={{ borderColor: "rgba(255,255,255,0.08)" }}>
@@ -427,11 +474,17 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                                     Page {page} · {pageNotes.length} note{pageNotes.length !== 1 ? "s" : ""}
                                 </p>
                             </div>
-                            <button onClick={() => setAddingNote(true)} disabled={addingNote}
-                                className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black disabled:opacity-40 transition-all hover:scale-[1.03]"
-                                style={{ background: `${doc.color}22`, color: doc.color }}>
-                                <Plus size={12} /> Add
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                                <button onClick={() => setAddingNote(true)} disabled={addingNote}
+                                    className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black disabled:opacity-40 transition-all hover:scale-[1.03]"
+                                    style={{ background: `${doc.color}22`, color: doc.color }}>
+                                    <Plus size={12} /> Add
+                                </button>
+                                <button onClick={() => setShowNotes(false)}
+                                    className="sm:hidden flex size-7 items-center justify-center rounded-lg hover:bg-white/10 text-white">
+                                    <X size={14} />
+                                </button>
+                            </div>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ scrollbarWidth: "thin" }}>
@@ -505,7 +558,7 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                                     </summary>
                                     <div className="mt-2 space-y-2">
                                         {doc.notes.filter(n => n.page !== page).map(note => (
-                                            <div key={note.id}
+                                             <div key={note.id}
                                                 className="group rounded-xl p-3 border cursor-pointer hover:opacity-80 transition-opacity"
                                                 style={{ background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.08)" }}
                                                 onClick={() => setPage(note.page)}>
@@ -522,7 +575,7 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
             </div>
 
             {/* ── Bottom Bar ── */}
-            <div className="flex items-center gap-4 px-5 py-2 border-t shrink-0"
+            <div className="flex items-center gap-3 px-3 sm:px-5 py-2 border-t shrink-0 h-10"
                 style={{ borderColor: "rgba(255,255,255,0.07)", background: "#0d1610" }}>
                 {/* Quick page jump buttons */}
                 <div className="hidden md:flex items-center gap-1.5 flex-wrap max-w-xs overflow-hidden">
@@ -545,13 +598,14 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                     )}
                 </div>
 
-                <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
+                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
                     <div className="h-full rounded-full transition-all duration-500"
                         style={{ width: `${pct}%`, background: `linear-gradient(90deg,${doc.color}88,${doc.color})` }} />
                 </div>
 
                 <span className="text-xs font-semibold shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>
-                    {page} / {doc.totalPages} · ← → navigate · Esc close
+                    <span className="hidden sm:inline">{page} / {doc.totalPages} · ← → navigate · Esc close</span>
+                    <span className="sm:hidden">{pct}% read ({page}/{doc.totalPages})</span>
                 </span>
             </div>
         </div>
@@ -650,7 +704,6 @@ export function StudyVault() {
     const handleProgress = useCallback(async (id: string, page: number) => {
         setDocs(prev => prev.map(d => d._id === id ? { ...d, lastPage: Math.max(d.lastPage, page) } : d));
         setOpenDoc(cur => cur?._id === id ? { ...cur, lastPage: Math.max(cur.lastPage, page) } : cur);
-        // Persist to DB (fire-and-forget)
         fetch(`/api/study-pdfs/${id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -772,6 +825,7 @@ export function StudyVault() {
                                     background: catFilter === c ? "var(--primary)" : "var(--muted)",
                                     color: catFilter === c ? "var(--primary-foreground)" : "var(--muted-foreground)",
                                     border: `1px solid ${catFilter === c ? "var(--primary)" : "var(--border)"}`,
+                                    cursor: "pointer",
                                 }}>
                                 {c}
                             </button>
@@ -779,7 +833,7 @@ export function StudyVault() {
                     </div>
                     <button onClick={() => setShowUpload(true)}
                         className="flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black transition-all hover:opacity-90 hover:scale-[1.02]"
-                        style={{ background: "linear-gradient(135deg,#16614f,#5ec4a8)", color: "#fff", boxShadow: "0 4px 16px rgba(22,97,79,0.35)" }}>
+                        style={{ background: "linear-gradient(135deg,#16614f,#5ec4a8)", color: "#fff", boxShadow: "0 4px 16px rgba(22,97,79,0.35)", cursor: "pointer" }}>
                         <Plus size={16} /> Add PDF
                     </button>
                 </div>
@@ -801,14 +855,14 @@ export function StudyVault() {
                             </p>
                             <p className="text-sm mt-1" style={{ color: "var(--muted-foreground)" }}>
                                 {docs.length === 0
-                                    ? "Upload your notes, aptitude books, or study material. They'll be saved permanently."
+                                    ? "Upload your notes, aptitude books, or study material. They will be saved permanently in your database."
                                     : "Try a different search or category."}
                             </p>
                         </div>
                         {docs.length === 0 && (
                             <button onClick={() => setShowUpload(true)}
                                 className="flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-black"
-                                style={{ background: "linear-gradient(135deg,#16614f,#5ec4a8)", color: "#fff" }}>
+                                style={{ background: "linear-gradient(135deg,#16614f,#5ec4a8)", color: "#fff", cursor: "pointer" }}>
                                 <Plus size={15} /> Upload First PDF
                             </button>
                         )}

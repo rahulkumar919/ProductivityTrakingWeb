@@ -12,9 +12,10 @@ const StudyPdfSchema = new Schema(
         userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
         title: { type: String, required: true, trim: true },
         category: { type: String, default: "General" },
-        pdfUrl: { type: String, required: true },      // Cloudinary URL
-        publicId: { type: String, required: true },    // Cloudinary public_id for deletion
-        pdfData: { type: String, default: "" },        // base64 data URL (for direct serving)
+        pdfUrl: { type: String, default: "" },      // Local proxy URL or legacy remote URL
+        publicId: { type: String, default: "" },    // Optional legacy Cloudinary public_id
+        fileId: { type: String, default: "", index: true }, // MongoDB GridFS File ID as hex string
+        pdfData: { type: String, default: "" },        // Base64 backup for small documents (< 2MB)
         fileSize: { type: Number, default: 0 },
         totalPages: { type: Number, default: 1 },
         lastPage: { type: Number, default: 1 },
