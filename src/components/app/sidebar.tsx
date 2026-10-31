@@ -27,12 +27,12 @@ const NAV = [
 ];
 
 /* Bottom nav shows only the 5 most-used items */
+/* Bottom nav shows 4 core destinations + More drawer button = 5 items (perfect for mobile) */
 const BOTTOM_NAV = [
   { href: "/dashboard", label: "Home", icon: Gauge, color: "#22c55e" },
   { href: "/tasks", label: "Tasks", icon: CheckSquare, color: "#6366f1" },
   { href: "/habits", label: "Habits", icon: Flame, color: "#f59e0b" },
   { href: "/study-vault", label: "Vault", icon: BookMarked, color: "#f97316" },
-  { href: "/ai-insights", label: "AI", icon: Brain, color: "#34d399" },
 ];
 
 /* ─── Shared avatar helper ────────────────────────────────── */
@@ -480,7 +480,9 @@ export function Sidebar() {
         .mob-header-inner {
           display: flex; align-items: center; gap: 10px;
           height: 56px; padding: 0 14px;
-          background: var(--sb-bg);
+          background: color-mix(in srgb, var(--sb-bg) 88%, transparent);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
           border-bottom: 1px solid var(--sb-border);
           box-shadow: 0 2px 12px rgba(0,0,0,0.06);
         }
@@ -622,12 +624,13 @@ export function Sidebar() {
         .mob-bottom-nav {
           display: none;
           position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
-          background: var(--sb-bg);
+          background: color-mix(in srgb, var(--sb-bg) 90%, transparent);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
           border-top: 1px solid var(--sb-border);
           box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
           padding-bottom: var(--safe-bottom);
           height: calc(var(--bottom-nav-h) + var(--safe-bottom));
-          display: none;
           align-items: stretch;
         }
         @media (max-width: 1023px) {

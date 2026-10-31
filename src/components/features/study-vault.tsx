@@ -1,7 +1,7 @@
 "use client";
 
 import {
-    BookMarked, BookOpen, ChevronLeft, ChevronRight, Download, ExternalLink,
+    ArrowLeft, BookMarked, BookOpen, Check, ChevronLeft, ChevronRight, Download, ExternalLink,
     FileText, Loader2, Maximize2, Minimize2, Plus,
     Search, StickyNote, Trash2, Upload, X, ZoomIn, ZoomOut,
 } from "lucide-react";
@@ -24,7 +24,7 @@ type PDFDoc = {
 };
 
 const CATEGORIES = [
-    "General", "DSA", "System Design", "DBMS", "OS",
+    "All", "General", "DSA", "System Design", "DBMS", "OS",
     "Networking", "OOP", "Mathematics", "Aptitude", "Other",
 ];
 const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#14b8a6", "#ec4899", "#8b5cf6", "#f97316"];
@@ -35,16 +35,18 @@ function removeCachedPdf(id: string) {
 }
 
 function fmtSize(b: number) {
+    if (!b) return "0 B";
     if (b < 1024) return `${b} B`;
     if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function fmtDate(iso: string) {
-    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    if (!iso) return "";
+    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
-/* ─── Upload Modal ───────────────────────────────────────────────── */
+/* ─── Upload Modal (Responsive Bottom-Sheet on Mobile, Centered on Desktop) ──────────────── */
 function UploadModal({ onClose, onUploaded }: {
     onClose: () => void;
     onUploaded: (pdf: PDFDoc) => void;
@@ -59,11 +61,11 @@ function UploadModal({ onClose, onUploaded }: {
 
     function pickFile(f: File) {
         if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
-            setError("Only PDF files are allowed.");
+            setError("Only PDF files are supported.");
             return;
         }
-        if (f.size > 25 * 1024 * 1024) {
-            setError("PDF must be under 25 MB.");
+        if (f.size > 50 * 1024 * 1024) {
+            setError("PDF must be under 50 MB.");
             return;
         }
         setFile(f);
@@ -73,14 +75,14 @@ function UploadModal({ onClose, onUploaded }: {
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!file) { setError("Please select a PDF file."); return; }
-        if (!title.trim()) { setError("Please enter a title."); return; }
+        if (!file) { setError("Please choose a PDF file."); return; }
+        if (!title.trim()) { setError("Please enter a title for your document."); return; }
 
         setUploading(true);
         setError("");
 
         try {
-            // Direct binary stream upload — completely avoids multipart/FormData parsing limits for large files (10MB-50MB+)
+            // Direct binary stream upload: completely avoids FormData limits & stream errors
             const uploadUrl = `/api/study-pdfs?title=${encodeURIComponent(title.trim())}&category=${encodeURIComponent(category)}`;
             const res = await fetch(uploadUrl, {
                 method: "POST",
@@ -118,79 +120,166 @@ function UploadModal({ onClose, onUploaded }: {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center"
-            style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)" }}
-            onClick={onClose}>
-            <div className="rounded-3xl p-7 max-w-md w-full mx-4"
-                style={{ background: "var(--card)", border: "1px solid var(--border)", boxShadow: "0 24px 64px rgba(0,0,0,0.25)", animation: "svFade .25s ease" }}
-                onClick={e => e.stopPropagation()}>
+        <div
+            className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center items-center"
+            style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)" }}
+            onClick={onClose}
+        >
+            <div
+                className="w-full sm:max-w-md rounded-t-[28px] sm:rounded-3xl p-5 sm:p-7 shadow-2xl transition-transform max-h-[92dvh] overflow-y-auto"
+                style={{
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
+                    boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+                    paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 16px))",
+                }}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Mobile drag handle */}
+                <div className="w-12 h-1.5 rounded-full bg-muted-foreground/25 mx-auto mb-4 sm:hidden" />
 
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-5">
                     <div>
-                        <h2 className="text-lg font-black" style={{ color: "var(--foreground)" }}>Upload PDF</h2>
-                        <p className="text-sm mt-0.5" style={{ color: "var(--muted-foreground)" }}>Saved permanently in your MongoDB Database</p>
+                        <h2 className="text-lg sm:text-xl font-black tracking-tight" style={{ color: "var(--foreground)" }}>
+                            Upload PDF
+                        </h2>
+                        <p className="text-xs sm:text-sm mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                            Stored permanently in your database
+                        </p>
                     </div>
-                    <button onClick={onClose} className="rounded-xl p-2 hover:bg-muted transition-colors">
+                    <button
+                        onClick={onClose}
+                        className="rounded-full p-2 hover:bg-muted active:scale-95 transition-all"
+                        aria-label="Close"
+                    >
                         <X size={18} style={{ color: "var(--muted-foreground)" }} />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Drop zone */}
+                    {/* File Picker Zone */}
                     <div
                         onDragOver={e => { e.preventDefault(); setDragging(true); }}
                         onDragLeave={() => setDragging(false)}
                         onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) pickFile(f); }}
                         onClick={() => inputRef.current?.click()}
-                        className="sv-drop"
-                        style={{ borderColor: file ? "var(--primary)" : dragging ? "var(--primary)" : "var(--border)", background: file ? "rgba(22,97,79,0.06)" : dragging ? "rgba(22,97,79,0.04)" : "var(--muted)" }}
+                        className="rounded-2xl p-4 sm:p-5 text-center cursor-pointer transition-all border-2 border-dashed active:scale-[0.99]"
+                        style={{
+                            borderColor: file ? "var(--primary)" : dragging ? "var(--primary)" : "var(--border)",
+                            background: file ? "rgba(22,97,79,0.08)" : dragging ? "rgba(22,97,79,0.05)" : "var(--muted)",
+                        }}
                     >
-                        <input ref={inputRef} type="file" accept="application/pdf" className="hidden"
-                            onChange={e => { const f = e.target.files?.[0]; if (f) pickFile(f); }} />
+                        <input
+                            ref={inputRef}
+                            type="file"
+                            accept="application/pdf"
+                            className="hidden"
+                            onChange={e => { const f = e.target.files?.[0]; if (f) pickFile(f); }}
+                        />
+
                         {file ? (
-                            <div className="flex items-center gap-3">
-                                <div className="flex size-12 items-center justify-center rounded-2xl" style={{ background: "rgba(22,97,79,0.12)" }}>
-                                    <FileText size={22} style={{ color: "var(--primary)" }} />
+                            <div className="flex items-center gap-3 text-left">
+                                <div className="flex size-12 items-center justify-center rounded-2xl shrink-0"
+                                    style={{ background: "rgba(22,97,79,0.15)", color: "var(--primary)" }}>
+                                    <FileText size={24} />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="font-bold text-sm truncate" style={{ color: "var(--foreground)" }}>{file.name}</p>
-                                    <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>{fmtSize(file.size)}</p>
+                                    <div className="flex items-center gap-1.5">
+                                        <p className="font-bold text-sm truncate" style={{ color: "var(--foreground)" }}>
+                                            {file.name}
+                                        </p>
+                                        <span className="text-emerald-500 shrink-0"><Check size={14} /></span>
+                                    </div>
+                                    <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                                        {fmtSize(file.size)} · Tap to change
+                                    </p>
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-center py-4">
-                                <div className="flex size-14 items-center justify-center rounded-2xl mx-auto mb-3" style={{ background: "rgba(22,97,79,0.08)" }}>
-                                    <Upload size={24} style={{ color: "var(--primary)" }} />
+                            <div className="py-2">
+                                <div className="flex size-12 items-center justify-center rounded-2xl mx-auto mb-2.5"
+                                    style={{ background: "rgba(22,97,79,0.1)", color: "var(--primary)" }}>
+                                    <Upload size={22} />
                                 </div>
-                                <p className="font-bold text-sm" style={{ color: "var(--foreground)" }}>{dragging ? "Drop it here!" : "Click or drag & drop"}</p>
-                                <p className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>PDF only · Max 25 MB</p>
+                                <p className="font-bold text-sm" style={{ color: "var(--foreground)" }}>
+                                    Tap to choose PDF from device
+                                </p>
+                                <p className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>
+                                    Books, Notes, Question Banks · Up to 50 MB
+                                </p>
                             </div>
                         )}
                     </div>
 
-                    {/* Title */}
-                    <div className="sv-field">
-                        <label className="sv-label">Title *</label>
-                        <input className="sv-input" value={title} onChange={e => setTitle(e.target.value)}
-                            placeholder="e.g. Sliding Window Notes" required />
+                    {/* Title Input */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold" style={{ color: "var(--muted-foreground)" }}>
+                            Document Title *
+                        </label>
+                        <input
+                            className="w-full h-11 rounded-xl px-3.5 text-sm outline-none transition-all border"
+                            style={{
+                                background: "var(--muted)",
+                                borderColor: "var(--border)",
+                                color: "var(--foreground)",
+                            }}
+                            value={title}
+                            onChange={e => setTitle(e.target.value)}
+                            placeholder="e.g. System Design Cheat Sheet"
+                            required
+                        />
                     </div>
 
-                    {/* Category */}
-                    <div className="sv-field">
-                        <label className="sv-label">Category</label>
-                        <select className="sv-input" value={category} onChange={e => setCategory(e.target.value)}>
-                            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                    {/* Category Selector */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold" style={{ color: "var(--muted-foreground)" }}>
+                            Category
+                        </label>
+                        <select
+                            className="w-full h-11 rounded-xl px-3.5 text-sm outline-none transition-all border"
+                            style={{
+                                background: "var(--muted)",
+                                borderColor: "var(--border)",
+                                color: "var(--foreground)",
+                            }}
+                            value={category}
+                            onChange={e => setCategory(e.target.value)}
+                        >
+                            {CATEGORIES.filter(c => c !== "All").map(c => (
+                                <option key={c} value={c}>{c}</option>
+                            ))}
                         </select>
                     </div>
 
-                    {error && <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>{error}</p>}
+                    {error && (
+                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs font-semibold text-red-500">
+                            {error}
+                        </div>
+                    )}
 
-                    <div className="flex gap-3 pt-1">
-                        <button type="button" onClick={onClose} className="flex-1 rounded-2xl py-3 text-sm font-bold"
-                            style={{ background: "var(--muted)", color: "var(--foreground)" }}>Cancel</button>
-                        <button type="submit" disabled={uploading} className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black"
-                            style={{ background: uploading ? "var(--muted)" : "linear-gradient(135deg,#16614f,#5ec4a8)", color: uploading ? "var(--muted-foreground)" : "#fff" }}>
-                            {uploading ? <><Loader2 size={16} className="animate-spin" /> Saving to Database…</> : <><Upload size={15} /> Upload & Save</>}
+                    <div className="flex gap-2.5 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 h-12 rounded-xl text-sm font-bold active:scale-[0.98] transition-all"
+                            style={{ background: "var(--muted)", color: "var(--foreground)" }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={uploading}
+                            className="flex-1 h-12 flex items-center justify-center gap-2 rounded-xl text-sm font-black text-white active:scale-[0.98] transition-all disabled:opacity-50"
+                            style={{
+                                background: uploading ? "var(--muted)" : "linear-gradient(135deg,#16614f,#5ec4a8)",
+                                boxShadow: "0 4px 14px rgba(22,97,79,0.3)",
+                            }}
+                        >
+                            {uploading ? (
+                                <><Loader2 size={16} className="animate-spin" /> Storing in DB…</>
+                            ) : (
+                                <><Upload size={16} /> Upload & Save</>
+                            )}
                         </button>
                     </div>
                 </form>
@@ -199,7 +288,7 @@ function UploadModal({ onClose, onUploaded }: {
     );
 }
 
-/* ─── PDF Viewer ─────────────────────────────────────────────────── */
+/* ─── Premium Mobile & Desktop PDF Viewer ───────────────────────── */
 function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
     doc: PDFDoc;
     onClose: () => void;
@@ -237,7 +326,7 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
     useEffect(() => { setLoading(true); setIframeError(false); }, [page]);
 
     const pageNotes = doc.notes.filter(n => n.page === page);
-    const pct = Math.round((page / doc.totalPages) * 100);
+    const pct = Math.round((page / Math.max(doc.totalPages, 1)) * 100);
 
     function saveNote() {
         if (!noteText.trim()) return;
@@ -247,145 +336,137 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex flex-col h-[100dvh] w-full overflow-hidden" style={{ background: "#0a0f0d" }}>
-            {/* ── Top Bar ── */}
-            <div className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 border-b shrink-0 h-12"
-                style={{ borderColor: "rgba(255,255,255,0.08)", background: "#0d1610" }}>
-                {/* Title + progress (desktop / tablet) */}
-                <div className="hidden sm:flex items-center gap-3 flex-1 min-w-0">
-                    <div className="flex size-8 items-center justify-center rounded-xl shrink-0" style={{ background: `${doc.color}22` }}>
-                        <FileText size={15} style={{ color: doc.color }} />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="font-black text-sm text-white truncate leading-tight">{doc.title}</p>
+        <div
+            className="fixed inset-0 z-50 flex flex-col h-[100dvh] w-full overflow-hidden select-none"
+            style={{ background: "#0a0f0d" }}
+        >
+            {/* ── Top App Bar (Mobile & Desktop) ── */}
+            <header
+                className="flex items-center justify-between px-3 sm:px-4 py-2 border-b shrink-0 h-13"
+                style={{
+                    borderColor: "rgba(255,255,255,0.08)",
+                    background: "#0d1610",
+                    paddingTop: "max(0.5rem, env(safe-area-inset-top, 8px))",
+                }}
+            >
+                {/* Left: Back / Close with Document Title */}
+                <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                    <button
+                        onClick={onClose}
+                        className="flex size-9 items-center justify-center rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white shrink-0"
+                        title="Back to Vault"
+                        aria-label="Back"
+                    >
+                        <ArrowLeft size={18} />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                        <p className="font-bold text-sm text-white truncate leading-tight">
+                            {doc.title}
+                        </p>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <div className="w-20 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
-                                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: doc.color }} />
-                            </div>
-                            <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{pct}% read</span>
+                            <span className="text-[10px] font-semibold text-white/50 truncate">
+                                {doc.category}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-400">
+                                · {pct}% read
+                            </span>
                         </div>
                     </div>
                 </div>
 
-                {/* Page navigation */}
-                <div className="flex items-center gap-1">
-                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-30 transition-all text-white">
-                        <ChevronLeft size={16} />
-                    </button>
-                    <div className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs sm:text-sm"
-                        style={{ background: "rgba(255,255,255,0.08)" }}>
-                        <input
-                            type="number" min={1} max={doc.totalPages} value={page}
-                            onChange={e => {
-                                const v = Math.max(1, Math.min(doc.totalPages, Number(e.target.value)));
-                                if (!isNaN(v)) setPage(v);
-                            }}
-                            className="w-8 sm:w-9 bg-transparent text-center font-black text-white outline-none"
-                            style={{ fontSize: "0.85rem" }}
-                        />
-                        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.75rem" }}>/ {doc.totalPages}</span>
+                {/* Center / Right Controls */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Page Pill */}
+                    <div
+                        className="flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-bold text-white/90"
+                        style={{ background: "rgba(255,255,255,0.08)" }}
+                    >
+                        <span>Pg {page}</span>
+                        <span className="text-white/40">/{doc.totalPages}</span>
                     </div>
-                    <button onClick={() => setPage(p => Math.min(doc.totalPages, p + 1))} disabled={page >= doc.totalPages}
-                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-30 transition-all text-white">
-                        <ChevronRight size={16} />
-                    </button>
-                </div>
 
-                {/* Zoom (desktop only) */}
-                <div className="hidden md:flex items-center gap-1.5 rounded-lg px-2 py-1" style={{ background: "rgba(255,255,255,0.06)" }}>
-                    <button onClick={() => setZoom(z => Math.max(50, z - 10))}
-                        className="flex size-7 items-center justify-center rounded hover:bg-white/10 transition-all text-white">
-                        <ZoomOut size={14} />
-                    </button>
-                    <button onClick={() => setZoom(100)}
-                        className="text-xs font-bold w-10 text-center hover:text-white transition-colors"
-                        style={{ color: "rgba(255,255,255,0.6)" }}>{zoom}%</button>
-                    <button onClick={() => setZoom(z => Math.min(200, z + 10))}
-                        className="flex size-7 items-center justify-center rounded hover:bg-white/10 transition-all text-white">
-                        <ZoomIn size={14} />
-                    </button>
-                </div>
-
-                <div className="flex items-center gap-1 ml-auto">
-                    {/* Notes toggle */}
-                    <button onClick={() => setShowNotes(v => !v)}
-                        className="flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs font-black transition-all"
+                    {/* Notes Toggle with Badge */}
+                    <button
+                        onClick={() => setShowNotes(v => !v)}
+                        className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-all active:scale-95"
                         style={{
-                            background: showNotes ? `${doc.color}22` : "rgba(255,255,255,0.07)",
-                            color: showNotes ? doc.color : "rgba(255,255,255,0.7)",
-                            border: `1.5px solid ${showNotes ? doc.color + "50" : "transparent"}`,
-                        }}>
+                            background: showNotes ? `${doc.color}30` : "rgba(255,255,255,0.08)",
+                            color: showNotes ? doc.color : "#fff",
+                            border: `1px solid ${showNotes ? doc.color : "transparent"}`,
+                        }}
+                        title="Notes"
+                    >
                         <StickyNote size={14} />
                         <span className="hidden sm:inline">Notes</span>
                         {doc.notes.length > 0 && (
-                            <span className="rounded-full px-1.5 py-0.2 text-xs font-black" style={{ background: doc.color, color: "#fff", fontSize: "0.65rem" }}>
+                            <span
+                                className="rounded-full px-1.5 py-0.2 text-[10px] font-black text-white shrink-0"
+                                style={{ background: doc.color }}
+                            >
                                 {doc.notes.length}
                             </span>
                         )}
                     </button>
 
-                    {/* Open in new tab / window */}
+                    {/* External Link */}
                     <a
                         href={proxyUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title="Open PDF in new tab"
-                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all text-white"
+                        className="flex size-9 items-center justify-center rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white/80 hover:text-white"
+                        title="Open in Browser / Full View"
                     >
                         <ExternalLink size={15} />
                     </a>
 
-                    {/* Download PDF directly */}
+                    {/* Download Link */}
                     <a
                         href={proxyUrl}
                         download={`${doc.title}.pdf`}
+                        className="hidden sm:flex size-9 items-center justify-center rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white/80 hover:text-white"
                         title="Download PDF"
-                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all text-white"
                     >
                         <Download size={15} />
                     </a>
 
-                    {/* Fullscreen (desktop only) */}
-                    <button onClick={() => setFullscreen(v => !v)}
-                        className="hidden sm:flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all text-white">
-                        {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-                    </button>
-
-                    {/* Close */}
-                    <button onClick={onClose}
-                        className="flex size-8 items-center justify-center rounded-lg hover:bg-white/10 transition-all text-white">
-                        <X size={16} />
+                    {/* Fullscreen (Desktop only) */}
+                    <button
+                        onClick={() => setFullscreen(v => !v)}
+                        className="hidden md:flex size-9 items-center justify-center rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white/80 hover:text-white"
+                        title={fullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                    >
+                        {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                     </button>
                 </div>
-            </div>
+            </header>
 
             {/* ── Main Content Area ── */}
             <div className="flex flex-1 min-h-0 w-full overflow-hidden relative">
-                {/* PDF Area: single scrollable container filling 100% space without nested clipping */}
+                {/* PDF Viewer Canvas: 100% full bleed on mobile for maximum readability */}
                 <div
                     className="flex-1 min-h-0 h-full w-full relative flex flex-col items-center justify-center overflow-hidden"
-                    style={{
-                        background: "#141a16",
-                        padding: 0,
-                    }}
+                    style={{ background: "#111613" }}
                 >
-                    {/* Loading spinner overlay */}
+                    {/* Loading indicator */}
                     {loading && (
-                        <div className="absolute inset-0 flex items-center justify-center z-10"
-                            style={{ background: "rgba(10,15,13,0.85)" }}>
+                        <div
+                            className="absolute inset-0 flex items-center justify-center z-10"
+                            style={{ background: "rgba(10,15,13,0.85)" }}
+                        >
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 size={36} className="animate-spin" style={{ color: doc.color }} />
-                                <p className="text-sm font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>Loading PDF from Database…</p>
+                                <p className="text-xs sm:text-sm font-semibold text-white/60">
+                                    Loading Document…
+                                </p>
                             </div>
                         </div>
                     )}
 
-                    {/* The PDF iframe - takes 100% of container so internal PDF viewer handles smooth touch & wheel scroll */}
+                    {/* PDF iframe: takes 100% full height & width so native touch scrolling is 60fps */}
                     <div
                         className="w-full h-full flex-1 relative"
                         style={{
-                            maxWidth: fullscreen ? "none" : 1080,
+                            maxWidth: fullscreen ? "none" : 1100,
                             margin: "0 auto",
                             transform: zoom !== 100 ? `scale(${zoom / 100})` : "none",
                             transformOrigin: "top center",
@@ -393,51 +474,30 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                         }}
                     >
                         {iframeError ? (
-                            /* ── Mobile / blocked iframe fallback: Open or download directly ── */
-                            <div style={{
-                                width: "100%",
-                                height: "100%",
-                                display: "flex", flexDirection: "column",
-                                alignItems: "center", justifyContent: "center", gap: 16,
-                                background: "#0d1610", borderRadius: 0,
-                                padding: 24,
-                            }}>
-                                <div style={{ fontSize: 44 }}>📄</div>
-                                <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#fff", textAlign: "center" }}>
-                                    {doc.title}
+                            /* Fallback screen if browser blocks inline iframe */
+                            <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-6 text-center"
+                                style={{ background: "#0d1610" }}>
+                                <div className="text-5xl">📄</div>
+                                <h3 className="text-base sm:text-lg font-black text-white">{doc.title}</h3>
+                                <p className="text-xs sm:text-sm text-white/60 max-w-xs">
+                                    Document saved in database. Tap below to view in full reader mode:
                                 </p>
-                                <p style={{ margin: 0, fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", textAlign: "center", maxWidth: 340 }}>
-                                    Document saved in MongoDB. Mobile browsers block inline PDF iframes — click below to view or download:
-                                </p>
-                                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+                                <div className="flex gap-2.5 flex-wrap justify-center">
                                     <a
                                         href={proxyUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        style={{
-                                            display: "inline-flex", alignItems: "center", gap: 8,
-                                            padding: "11px 22px", borderRadius: 14,
-                                            background: doc.color, color: "#fff",
-                                            fontWeight: 800, fontSize: "0.88rem",
-                                            textDecoration: "none",
-                                            boxShadow: `0 4px 16px ${doc.color}40`,
-                                        }}
+                                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs text-white"
+                                        style={{ background: doc.color }}
                                     >
-                                        <ExternalLink size={16} /> Open in Viewer
+                                        <ExternalLink size={14} /> Open in Native Reader
                                     </a>
                                     <a
                                         href={proxyUrl}
                                         download={`${doc.title}.pdf`}
-                                        style={{
-                                            display: "inline-flex", alignItems: "center", gap: 8,
-                                            padding: "11px 22px", borderRadius: 14,
-                                            background: "rgba(255,255,255,0.1)", color: "#fff",
-                                            fontWeight: 800, fontSize: "0.88rem",
-                                            textDecoration: "none",
-                                            border: "1px solid rgba(255,255,255,0.2)",
-                                        }}
+                                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-white/10"
                                     >
-                                        <Download size={16} /> Download
+                                        <Download size={14} /> Download PDF
                                     </a>
                                 </div>
                             </div>
@@ -455,63 +515,83 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
                                     border: "none",
                                     background: "#fff",
                                     display: "block",
-                                    touchAction: "auto",
                                 }}
                             />
                         )}
                     </div>
                 </div>
 
-                {/* ── Notes Sidebar (responsive: overlays as a drawer on mobile, splits on desktop) ── */}
+                {/* ── Notes Drawer: Responsive Bottom-Sheet on Mobile, Sidebar on Desktop ── */}
                 {showNotes && (
-                    <div className="absolute sm:relative inset-y-0 right-0 z-20 w-72 sm:w-80 shrink-0 flex flex-col border-l shadow-2xl sm:shadow-none"
-                        style={{ borderColor: "rgba(255,255,255,0.08)", background: "#0d1610" }}>
+                    <div
+                        className="fixed inset-x-0 bottom-0 z-30 max-h-[75dvh] sm:static sm:z-auto sm:max-h-none sm:w-80 shrink-0 flex flex-col border-t sm:border-t-0 sm:border-l shadow-2xl sm:shadow-none rounded-t-[28px] sm:rounded-none"
+                        style={{
+                            borderColor: "rgba(255,255,255,0.08)",
+                            background: "#0d1610",
+                            paddingBottom: "max(1rem, env(safe-area-inset-bottom, 16px))",
+                        }}
+                    >
+                        {/* Mobile drawer handle */}
+                        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mt-2.5 sm:hidden" />
+
                         <div className="flex items-center justify-between px-4 py-3 border-b shrink-0"
                             style={{ borderColor: "rgba(255,255,255,0.08)" }}>
                             <div>
                                 <p className="font-black text-sm text-white">Notes</p>
-                                <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                                <p className="text-[11px] text-white/40">
                                     Page {page} · {pageNotes.length} note{pageNotes.length !== 1 ? "s" : ""}
                                 </p>
                             </div>
                             <div className="flex items-center gap-1.5">
-                                <button onClick={() => setAddingNote(true)} disabled={addingNote}
-                                    className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black disabled:opacity-40 transition-all hover:scale-[1.03]"
-                                    style={{ background: `${doc.color}22`, color: doc.color }}>
+                                <button
+                                    onClick={() => setAddingNote(true)}
+                                    disabled={addingNote}
+                                    className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-black disabled:opacity-40 active:scale-95 transition-all"
+                                    style={{ background: `${doc.color}25`, color: doc.color }}
+                                >
                                     <Plus size={12} /> Add
                                 </button>
-                                <button onClick={() => setShowNotes(false)}
-                                    className="sm:hidden flex size-7 items-center justify-center rounded-lg hover:bg-white/10 text-white">
-                                    <X size={14} />
+                                <button
+                                    onClick={() => setShowNotes(false)}
+                                    className="sm:hidden flex size-7 items-center justify-center rounded-lg hover:bg-white/10 text-white"
+                                >
+                                    <X size={15} />
                                 </button>
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ scrollbarWidth: "thin" }}>
+                        <div className="flex-1 overflow-y-auto p-3 space-y-2.5" style={{ scrollbarWidth: "thin" }}>
                             {/* Note input */}
                             {addingNote && (
-                                <div className="rounded-2xl p-3 space-y-2 border"
-                                    style={{ background: `${doc.color}0d`, borderColor: `${doc.color}30` }}>
-                                    <p className="text-xs font-black" style={{ color: doc.color }}>Note · Page {page}</p>
+                                <div
+                                    className="rounded-2xl p-3 space-y-2 border"
+                                    style={{ background: `${doc.color}0f`, borderColor: `${doc.color}35` }}
+                                >
+                                    <p className="text-xs font-black" style={{ color: doc.color }}>Note for Page {page}</p>
                                     <textarea
-                                        autoFocus rows={4}
+                                        autoFocus
+                                        rows={3}
                                         value={noteText}
                                         onChange={e => setNoteText(e.target.value)}
-                                        placeholder="Write your note…"
+                                        placeholder="Type key takeaway or formula…"
                                         className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none"
-                                        style={{ background: "rgba(0,0,0,0.35)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", lineHeight: 1.5 }}
-                                        onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) saveNote(); }}
+                                        style={{ background: "rgba(0,0,0,0.4)", color: "#fff", border: "1px solid rgba(255,255,255,0.12)" }}
+                                        onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) saveNote(); }}
                                     />
-                                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>Ctrl+Enter to save</p>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { setAddingNote(false); setNoteText(""); }}
+                                        <button
+                                            onClick={() => { setAddingNote(false); setNoteText(""); }}
                                             className="flex-1 rounded-xl py-2 text-xs font-bold"
-                                            style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.55)" }}>
+                                            style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.6)" }}
+                                        >
                                             Cancel
                                         </button>
-                                        <button onClick={saveNote} disabled={!noteText.trim()}
+                                        <button
+                                            onClick={saveNote}
+                                            disabled={!noteText.trim()}
                                             className="flex-1 rounded-xl py-2 text-xs font-black disabled:opacity-40"
-                                            style={{ background: doc.color, color: "#fff" }}>
+                                            style={{ background: doc.color, color: "#fff" }}
+                                        >
                                             Save
                                         </button>
                                     </div>
@@ -520,164 +600,204 @@ function PDFViewer({ doc, onClose, onProgress, onAddNote, onDeleteNote }: {
 
                             {/* No notes placeholder */}
                             {pageNotes.length === 0 && !addingNote && (
-                                <div className="flex flex-col items-center gap-2 py-12 text-center">
-                                    <StickyNote size={26} style={{ color: "rgba(255,255,255,0.12)" }} />
-                                    <p className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.25)" }}>No notes on page {page}</p>
-                                    <button onClick={() => setAddingNote(true)}
-                                        className="text-xs font-black mt-1 rounded-xl px-3 py-1.5"
-                                        style={{ color: doc.color, background: `${doc.color}15` }}>
-                                        + Add a note
+                                <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+                                    <StickyNote size={24} style={{ color: "rgba(255,255,255,0.15)" }} />
+                                    <p className="text-xs text-white/40">No notes on page {page}</p>
+                                    <button
+                                        onClick={() => setAddingNote(true)}
+                                        className="text-xs font-bold mt-1 text-emerald-400 underline decoration-dashed underline-offset-4"
+                                    >
+                                        + Add a quick note
                                     </button>
                                 </div>
                             )}
 
-                            {/* Note cards */}
+                            {/* Note items */}
                             {pageNotes.map(note => (
-                                <div key={note.id} className="group rounded-2xl p-3.5 border"
-                                    style={{ background: `${doc.color}0a`, borderColor: `${doc.color}20` }}>
-                                    <div className="flex items-start gap-2">
-                                        <p className="text-sm text-white leading-relaxed flex-1 whitespace-pre-wrap">{note.text}</p>
-                                        <button onClick={() => onDeleteNote(doc._id, note.id)}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity rounded-lg p-1 shrink-0 hover:bg-red-500/20"
-                                            style={{ color: "#ef4444" }}>
-                                            <Trash2 size={12} />
+                                <div
+                                    key={note.id}
+                                    className="rounded-2xl p-3 border group"
+                                    style={{ background: `${doc.color}0a`, borderColor: `${doc.color}20` }}
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <p className="text-xs sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap flex-1">
+                                            {note.text}
+                                        </p>
+                                        <button
+                                            onClick={() => onDeleteNote(doc._id, note.id)}
+                                            className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 p-1 text-red-400 hover:text-red-300 transition-opacity"
+                                        >
+                                            <Trash2 size={13} />
                                         </button>
                                     </div>
-                                    <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.25)" }}>
-                                        {new Date(note.createdAt).toLocaleString("en-IN", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
+                                    <p className="text-[10px] mt-1.5 text-white/30">
+                                        {new Date(note.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                                     </p>
                                 </div>
                             ))}
-
-                            {/* All notes from other pages */}
-                            {doc.notes.filter(n => n.page !== page).length > 0 && (
-                                <details className="mt-2">
-                                    <summary className="text-xs font-bold cursor-pointer select-none py-1"
-                                        style={{ color: "rgba(255,255,255,0.3)" }}>
-                                        {doc.notes.filter(n => n.page !== page).length} notes from other pages
-                                    </summary>
-                                    <div className="mt-2 space-y-2">
-                                        {doc.notes.filter(n => n.page !== page).map(note => (
-                                             <div key={note.id}
-                                                className="group rounded-xl p-3 border cursor-pointer hover:opacity-80 transition-opacity"
-                                                style={{ background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.08)" }}
-                                                onClick={() => setPage(note.page)}>
-                                                <p className="text-xs font-bold mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>Page {note.page}</p>
-                                                <p className="text-xs text-white leading-relaxed line-clamp-2">{note.text}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </details>
-                            )}
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* ── Bottom Bar ── */}
-            <div className="flex items-center gap-3 px-3 sm:px-5 py-2 border-t shrink-0 h-10"
-                style={{ borderColor: "rgba(255,255,255,0.07)", background: "#0d1610" }}>
-                {/* Quick page jump buttons */}
-                <div className="hidden md:flex items-center gap-1.5 flex-wrap max-w-xs overflow-hidden">
-                    {Array.from({ length: Math.min(doc.totalPages, 12) }, (_, i) => i + 1).map(p => (
-                        <button
-                            key={p}
-                            onClick={() => setPage(p)}
-                            className="rounded-md text-xs font-bold transition-all"
-                            style={{
-                                width: 26, height: 22,
-                                background: p === page ? doc.color : "rgba(255,255,255,0.06)",
-                                color: p === page ? "#fff" : "rgba(255,255,255,0.35)",
-                                fontSize: "0.68rem",
-                            }}>
-                            {p}
-                        </button>
-                    ))}
-                    {doc.totalPages > 12 && (
-                        <span className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>+{doc.totalPages - 12} more</span>
-                    )}
+            {/* ── Bottom Reader Toolbar (Mobile Friendly Navigation) ── */}
+            <footer
+                className="flex items-center justify-between px-3 sm:px-5 py-2 border-t shrink-0 h-13"
+                style={{
+                    borderColor: "rgba(255,255,255,0.07)",
+                    background: "#0d1610",
+                    paddingBottom: "max(0.5rem, env(safe-area-inset-bottom, 8px))",
+                }}
+            >
+                {/* Prev Button */}
+                <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-white bg-white/10 hover:bg-white/15 disabled:opacity-30 active:scale-95 transition-all"
+                >
+                    <ChevronLeft size={16} />
+                    <span className="hidden sm:inline">Previous</span>
+                </button>
+
+                {/* Progress Bar & Jump */}
+                <div className="flex-1 max-w-xs mx-3 sm:mx-6 flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-white/10">
+                        <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{ width: `${pct}%`, background: doc.color }}
+                        />
+                    </div>
+                    <span className="text-[11px] font-bold text-white/50 shrink-0">
+                        {pct}%
+                    </span>
                 </div>
 
-                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
-                    <div className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%`, background: `linear-gradient(90deg,${doc.color}88,${doc.color})` }} />
-                </div>
-
-                <span className="text-xs font-semibold shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>
-                    <span className="hidden sm:inline">{page} / {doc.totalPages} · ← → navigate · Esc close</span>
-                    <span className="sm:hidden">{pct}% read ({page}/{doc.totalPages})</span>
-                </span>
-            </div>
+                {/* Next Button */}
+                <button
+                    onClick={() => setPage(p => Math.min(doc.totalPages, p + 1))}
+                    disabled={page >= doc.totalPages}
+                    className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-white bg-white/10 hover:bg-white/15 disabled:opacity-30 active:scale-95 transition-all"
+                >
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight size={16} />
+                </button>
+            </footer>
         </div>
     );
 }
 
-/* ─── PDF Card ───────────────────────────────────────────────────── */
+/* ─── Premium PDF Card Component ─────────────────────────────────── */
 function PDFCard({ doc, onOpen, onDelete }: { doc: PDFDoc; onOpen: () => void; onDelete: () => void }) {
     const pct = Math.round((doc.lastPage / Math.max(doc.totalPages, 1)) * 100);
     const done = pct >= 100;
+
     return (
-        <div className="sv-card group" style={{ "--c": doc.color } as React.CSSProperties}>
-            <div className="sv-card-strip" style={{ background: doc.color }} />
-            <div className="p-5 space-y-4">
-                <div className="flex items-start gap-3">
-                    <div className="flex size-12 items-center justify-center rounded-2xl shrink-0"
-                        style={{ background: `${doc.color}15`, border: `1.5px solid ${doc.color}25` }}>
-                        <FileText size={22} style={{ color: doc.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="font-black text-sm leading-tight truncate" style={{ color: "var(--foreground)" }}>{doc.title}</p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="rounded-lg px-2 py-0.5 text-xs font-bold"
-                                style={{ background: `${doc.color}15`, color: doc.color }}>{doc.category}</span>
-                            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                                {fmtSize(doc.fileSize)} · Added {fmtDate(doc.createdAt)}
-                            </span>
+        <div
+            className="group rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all relative overflow-hidden"
+            style={{
+                background: "var(--card)",
+                border: "1px solid var(--border)",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+            }}
+        >
+            {/* Top Color Accent Strip */}
+            <div
+                className="absolute top-0 inset-x-0 h-1"
+                style={{ background: doc.color }}
+            />
+
+            <div>
+                {/* Header row */}
+                <div className="flex items-start gap-3 justify-between">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div
+                            className="flex size-11 items-center justify-center rounded-2xl shrink-0"
+                            style={{ background: `${doc.color}18`, color: doc.color }}
+                        >
+                            <FileText size={22} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <h3
+                                className="font-black text-sm sm:text-base leading-snug truncate"
+                                style={{ color: "var(--foreground)" }}
+                                title={doc.title}
+                            >
+                                {doc.title}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <span
+                                    className="rounded-lg px-2 py-0.5 text-[11px] font-bold"
+                                    style={{ background: `${doc.color}15`, color: doc.color }}
+                                >
+                                    {doc.category}
+                                </span>
+                                <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
+                                    {fmtSize(doc.fileSize)}
+                                </span>
+                            </div>
                         </div>
                     </div>
-                    <button onClick={e => { e.stopPropagation(); onDelete(); }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity rounded-xl p-2 hover:bg-red-500/10"
-                        style={{ color: "#ef4444" }}>
-                        <Trash2 size={15} />
+
+                    {/* Delete button: always accessible on mobile, hover on desktop */}
+                    <button
+                        onClick={e => { e.stopPropagation(); onDelete(); }}
+                        className="rounded-xl p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 active:scale-90 transition-all shrink-0"
+                        title="Delete Document"
+                        aria-label="Delete"
+                    >
+                        <Trash2 size={16} />
                     </button>
                 </div>
 
-                <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold" style={{ color: "var(--muted-foreground)" }}>
-                            {done ? "✓ Completed" : `Page ${doc.lastPage} / ${doc.totalPages}`}
+                {/* Progress stats */}
+                <div className="mt-4 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                        <span style={{ color: "var(--muted-foreground)" }}>
+                            {done ? "✓ Completed" : `Page ${doc.lastPage} of ${doc.totalPages}`}
                         </span>
-                        <span className="text-xs font-black" style={{ color: done ? "#22c55e" : doc.color }}>{pct}%</span>
+                        <span style={{ color: done ? "#22c55e" : doc.color }}>
+                            {pct}%
+                        </span>
                     </div>
                     <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
-                        <div className="h-full rounded-full transition-all duration-500"
-                            style={{ width: `${pct}%`, background: done ? "#22c55e" : `linear-gradient(90deg,${doc.color}99,${doc.color})` }} />
+                        <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                                width: `${pct}%`,
+                                background: done ? "#22c55e" : `linear-gradient(90deg, ${doc.color}88, ${doc.color})`,
+                            }}
+                        />
                     </div>
                 </div>
 
+                {/* Notes indicator */}
                 {doc.notes.length > 0 && (
-                    <div className="flex items-center gap-2">
-                        <span className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold"
-                            style={{ background: `${doc.color}12`, color: doc.color }}>
-                            <StickyNote size={11} /> {doc.notes.length} note{doc.notes.length !== 1 ? "s" : ""}
-                        </span>
-                        {done && <span className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold"
-                            style={{ background: "rgba(34,197,94,0.12)", color: "#22c55e" }}>✓ Done</span>}
+                    <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-bold" style={{ color: doc.color }}>
+                        <StickyNote size={12} />
+                        <span>{doc.notes.length} note{doc.notes.length !== 1 ? "s" : ""}</span>
                     </div>
                 )}
+            </div>
 
-                <button onClick={onOpen}
-                    className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black transition-all hover:opacity-90 hover:scale-[1.02]"
-                    style={{ background: `linear-gradient(135deg,${doc.color}dd,${doc.color})`, color: "#fff", boxShadow: `0 4px 16px ${doc.color}35` }}>
-                    <BookOpen size={15} />
-                    {pct === 0 ? "Start Reading" : done ? "Read Again" : "Continue Reading"}
+            {/* Read Button */}
+            <div className="mt-5">
+                <button
+                    onClick={onOpen}
+                    className="w-full h-11 flex items-center justify-center gap-2 rounded-xl text-sm font-black text-white active:scale-[0.98] transition-all"
+                    style={{
+                        background: `linear-gradient(135deg, ${doc.color}ee, ${doc.color})`,
+                        boxShadow: `0 4px 14px ${doc.color}35`,
+                    }}
+                >
+                    <BookOpen size={16} />
+                    <span>{pct === 0 ? "Start Reading" : done ? "Read Again" : "Continue Reading"}</span>
                 </button>
             </div>
         </div>
     );
 }
 
-/* ─── Main StudyVault ────────────────────────────────────────────── */
+/* ─── Main StudyVault Page ───────────────────────────────────────── */
 export function StudyVault() {
     const [docs, setDocs] = useState<PDFDoc[]>([]);
     const [loading, setLoading] = useState(true);
@@ -737,10 +857,12 @@ export function StudyVault() {
             await fetch(`/api/study-pdfs/${doc._id}`, { method: "DELETE" });
             removeCachedPdf(doc._id);
             setDocs(prev => prev.filter(d => d._id !== doc._id));
-        } finally { setDeleting(false); setDeleteTarget(null); }
+        } finally {
+            setDeleting(false);
+            setDeleteTarget(null);
+        }
     }
 
-    const allCats = ["All", ...Array.from(new Set(docs.map(d => d.category)))];
     const filtered = docs.filter(d => {
         const matchSearch = !search || d.title.toLowerCase().includes(search.toLowerCase()) || d.category.toLowerCase().includes(search.toLowerCase());
         const matchCat = catFilter === "All" || d.category === catFilter;
@@ -755,166 +877,203 @@ export function StudyVault() {
             {showUpload && <UploadModal onClose={() => setShowUpload(false)} onUploaded={handleUploaded} />}
 
             {openDoc && (
-                <PDFViewer doc={openDoc} onClose={() => setOpenDoc(null)}
-                    onProgress={handleProgress} onAddNote={handleAddNote} onDeleteNote={handleDeleteNote} />
+                <PDFViewer
+                    doc={openDoc}
+                    onClose={() => setOpenDoc(null)}
+                    onProgress={handleProgress}
+                    onAddNote={handleAddNote}
+                    onDeleteNote={handleDeleteNote}
+                />
             )}
 
+            {/* Delete Confirmation Modal */}
             {deleteTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center"
+                <div
+                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
                     style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
-                    onClick={() => setDeleteTarget(null)}>
-                    <div className="rounded-3xl p-8 text-center max-w-sm w-full mx-4"
-                        style={{ background: "var(--card)", border: "1px solid var(--border)", animation: "svFade .25s ease" }}
-                        onClick={e => e.stopPropagation()}>
-                        <div className="flex size-16 items-center justify-center rounded-2xl mx-auto mb-4" style={{ background: "rgba(239,68,68,0.1)" }}>
-                            <Trash2 size={28} style={{ color: "#ef4444" }} />
+                    onClick={() => setDeleteTarget(null)}
+                >
+                    <div
+                        className="rounded-t-[28px] sm:rounded-3xl p-6 sm:p-7 text-center max-w-sm w-full shadow-2xl"
+                        style={{
+                            background: "var(--card)",
+                            border: "1px solid var(--border)",
+                            paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 16px))",
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex size-14 items-center justify-center rounded-2xl mx-auto mb-3 bg-red-500/10 text-red-500">
+                            <Trash2 size={26} />
                         </div>
-                        <h3 className="text-lg font-black">Delete PDF?</h3>
-                        <p className="mt-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
-                            &ldquo;{deleteTarget.title}&rdquo; and all its notes will be permanently deleted from your vault.
+                        <h3 className="text-lg font-black" style={{ color: "var(--foreground)" }}>Delete PDF?</h3>
+                        <p className="mt-1.5 text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                            &ldquo;{deleteTarget.title}&rdquo; and all attached notes will be permanently removed.
                         </p>
-                        <div className="mt-6 flex gap-3">
-                            <button onClick={() => setDeleteTarget(null)} className="flex-1 rounded-2xl py-3 text-sm font-bold"
-                                style={{ background: "var(--muted)", color: "var(--foreground)" }}>Cancel</button>
-                            <button onClick={() => handleDelete(deleteTarget)} disabled={deleting}
-                                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black"
-                                style={{ background: "linear-gradient(135deg,#dc2626,#ef4444)", color: "#fff" }}>
-                                {deleting ? <><Loader2 size={14} className="animate-spin" /> Deleting…</> : "Delete"}
+                        <div className="mt-5 flex gap-2.5">
+                            <button
+                                onClick={() => setDeleteTarget(null)}
+                                className="flex-1 h-11 rounded-xl text-xs sm:text-sm font-bold bg-muted text-foreground active:scale-95 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleDelete(deleteTarget)}
+                                disabled={deleting}
+                                className="flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl text-xs sm:text-sm font-black text-white bg-red-500 hover:bg-red-600 active:scale-95 transition-all disabled:opacity-50"
+                            >
+                                {deleting ? <Loader2 size={14} className="animate-spin" /> : "Delete"}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            <div className="space-y-6">
-                {/* Stats row */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="space-y-4 sm:space-y-6">
+                {/* ── Summary Stats (2x2 on Mobile, 4x1 on Desktop) ── */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
                     {[
-                        { label: "Total PDFs", value: docs.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)" },
-                        { label: "Completed", value: completed, color: "#22c55e", bg: "rgba(34,197,94,0.1)" },
-                        { label: "In Progress", value: docs.length - completed, color: "#f59e0b", bg: "rgba(245,158,11,0.1)" },
-                        { label: "Total Notes", value: totalNotes, color: "#14b8a6", bg: "rgba(20,184,166,0.1)" },
-                    ].map(s => (
-                        <div key={s.label} className="rounded-2xl p-4 flex items-center gap-3"
-                            style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-                            <div className="size-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.bg }}>
-                                <BookMarked size={18} style={{ color: s.color }} />
+                        { label: "Total Vault", value: docs.length, color: "#6366f1", bg: "rgba(99,102,241,0.1)", icon: BookMarked },
+                        { label: "Completed", value: completed, color: "#22c55e", bg: "rgba(34,197,94,0.1)", icon: Check },
+                        { label: "In Progress", value: docs.length - completed, color: "#f59e0b", bg: "rgba(245,158,11,0.1)", icon: BookOpen },
+                        { label: "Total Notes", value: totalNotes, color: "#14b8a6", bg: "rgba(20,184,166,0.1)", icon: StickyNote },
+                    ].map(s => {
+                        const Icon = s.icon;
+                        return (
+                            <div
+                                key={s.label}
+                                className="rounded-2xl p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3 border transition-transform active:scale-[0.99]"
+                                style={{ background: "var(--card)", borderColor: "var(--border)" }}
+                            >
+                                <div
+                                    className="size-9 sm:size-10 rounded-xl flex items-center justify-center shrink-0"
+                                    style={{ background: s.bg, color: s.color }}
+                                >
+                                    <Icon size={18} />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-semibold text-muted-foreground truncate">{s.label}</p>
+                                    <p className="text-lg sm:text-xl font-black leading-tight" style={{ color: s.color }}>{s.value}</p>
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-xs font-semibold" style={{ color: "var(--muted-foreground)" }}>{s.label}</p>
-                                <p className="text-xl font-black" style={{ color: s.color }}>{s.value}</p>
-                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* ── Mobile-Optimized Toolbar (Search + Horizontal Category Scroll) ── */}
+                <div className="space-y-3">
+                    {/* Search & Add Button row */}
+                    <div className="flex items-center gap-2.5">
+                        <div
+                            className="flex items-center gap-2 flex-1 rounded-2xl border px-3 h-11"
+                            style={{ background: "var(--muted)", borderColor: "var(--border)" }}
+                        >
+                            <Search size={16} className="text-muted-foreground shrink-0" />
+                            <input
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                placeholder="Search by title or topic…"
+                                className="flex-1 bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground/70"
+                            />
+                            {search && (
+                                <button
+                                    onClick={() => setSearch("")}
+                                    className="p-1 text-muted-foreground hover:text-foreground"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
                         </div>
-                    ))}
+
+                        {/* Add PDF Button */}
+                        <button
+                            onClick={() => setShowUpload(true)}
+                            className="h-11 flex items-center gap-1.5 px-4 rounded-2xl font-black text-xs sm:text-sm text-white shrink-0 active:scale-95 transition-all shadow-md"
+                            style={{
+                                background: "linear-gradient(135deg,#16614f,#5ec4a8)",
+                                boxShadow: "0 4px 14px rgba(22,97,79,0.3)",
+                            }}
+                        >
+                            <Plus size={16} />
+                            <span>Add PDF</span>
+                        </button>
+                    </div>
+
+                    {/* Horizontal Smooth-Scroll Category Pills */}
+                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar -mx-1 px-1">
+                        {CATEGORIES.map(c => {
+                            const active = catFilter === c;
+                            return (
+                                <button
+                                    key={c}
+                                    onClick={() => setCatFilter(c)}
+                                    className="rounded-xl px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-all shrink-0 active:scale-95"
+                                    style={{
+                                        background: active ? "var(--primary)" : "var(--muted)",
+                                        color: active ? "var(--primary-foreground)" : "var(--muted-foreground)",
+                                        border: `1px solid ${active ? "var(--primary)" : "var(--border)"}`,
+                                    }}
+                                >
+                                    {c}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                {/* Toolbar */}
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 flex-1 min-w-52 rounded-2xl border px-3 py-2.5"
-                        style={{ background: "var(--muted)", borderColor: "var(--border)" }}>
-                        <Search size={15} style={{ color: "var(--muted-foreground)" }} />
-                        <input value={search} onChange={e => setSearch(e.target.value)}
-                            placeholder="Search PDFs…" className="flex-1 bg-transparent text-sm outline-none"
-                            style={{ color: "var(--foreground)" }} />
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                        {allCats.map(c => (
-                            <button key={c} onClick={() => setCatFilter(c)}
-                                className="rounded-xl px-3 py-2 text-xs font-bold transition-all"
-                                style={{
-                                    background: catFilter === c ? "var(--primary)" : "var(--muted)",
-                                    color: catFilter === c ? "var(--primary-foreground)" : "var(--muted-foreground)",
-                                    border: `1px solid ${catFilter === c ? "var(--primary)" : "var(--border)"}`,
-                                    cursor: "pointer",
-                                }}>
-                                {c}
-                            </button>
-                        ))}
-                    </div>
-                    <button onClick={() => setShowUpload(true)}
-                        className="flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-black transition-all hover:opacity-90 hover:scale-[1.02]"
-                        style={{ background: "linear-gradient(135deg,#16614f,#5ec4a8)", color: "#fff", boxShadow: "0 4px 16px rgba(22,97,79,0.35)", cursor: "pointer" }}>
-                        <Plus size={16} /> Add PDF
-                    </button>
-                </div>
-
-                {/* Grid */}
+                {/* ── Document Cards Grid ── */}
                 {loading ? (
-                    <div className="flex items-center justify-center py-20">
-                        <Loader2 size={32} className="animate-spin" style={{ color: "var(--primary)" }} />
+                    <div className="flex flex-col items-center justify-center py-24 gap-3">
+                        <Loader2 size={36} className="animate-spin text-primary" />
+                        <p className="text-xs font-bold text-muted-foreground">Loading your vault…</p>
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-                        <div className="flex size-20 items-center justify-center rounded-3xl"
-                            style={{ background: "rgba(22,97,79,0.08)" }}>
-                            <BookMarked size={36} style={{ color: "var(--primary)" }} />
+                    <div className="flex flex-col items-center justify-center gap-3.5 py-16 px-4 text-center rounded-3xl border border-dashed border-border bg-card/50">
+                        <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                            <BookMarked size={30} />
                         </div>
                         <div>
-                            <p className="font-black text-lg" style={{ color: "var(--foreground)" }}>
-                                {docs.length === 0 ? "No PDFs yet" : "No results found"}
+                            <p className="font-black text-base text-foreground">
+                                {docs.length === 0 ? "Your Vault is Empty" : "No Matches Found"}
                             </p>
-                            <p className="text-sm mt-1" style={{ color: "var(--muted-foreground)" }}>
+                            <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
                                 {docs.length === 0
-                                    ? "Upload your notes, aptitude books, or study material. They will be saved permanently in your database."
-                                    : "Try a different search or category."}
+                                    ? "Upload your DSA sheets, lecture PDFs, or notes to read and review them anywhere."
+                                    : "Try searching for a different keyword or category."}
                             </p>
                         </div>
                         {docs.length === 0 && (
-                            <button onClick={() => setShowUpload(true)}
-                                className="flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-black"
-                                style={{ background: "linear-gradient(135deg,#16614f,#5ec4a8)", color: "#fff", cursor: "pointer" }}>
-                                <Plus size={15} /> Upload First PDF
+                            <button
+                                onClick={() => setShowUpload(true)}
+                                className="mt-2 flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black text-white bg-primary shadow-md active:scale-95 transition-all"
+                            >
+                                <Plus size={15} /> Upload Your First PDF
                             </button>
                         )}
                     </div>
                 ) : (
-                    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid gap-3.5 sm:gap-5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
                         {filtered.map(doc => (
-                            <PDFCard key={doc._id} doc={doc}
+                            <PDFCard
+                                key={doc._id}
+                                doc={doc}
                                 onOpen={() => setOpenDoc(doc)}
-                                onDelete={() => setDeleteTarget(doc)} />
+                                onDelete={() => setDeleteTarget(doc)}
+                            />
                         ))}
                     </div>
                 )}
             </div>
 
-            <style>{`
-        @keyframes svFade { from { opacity:0; transform:scale(.95) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
-
-        .sv-card {
-          background: var(--card);
-          border: 1px solid var(--border);
-          border-radius: 20px;
-          overflow: hidden;
-          position: relative;
-          transition: transform .18s, box-shadow .18s;
-        }
-        .sv-card:hover { transform: translateY(-3px); box-shadow: 0 12px 36px rgba(0,0,0,0.1); }
-        .sv-card-strip { height: 4px; width: 100%; }
-
-        .sv-drop {
-          border: 2px dashed;
-          border-radius: 18px;
-          padding: 20px;
-          cursor: pointer;
-          transition: all .2s;
-        }
-
-        .sv-field { display: flex; flex-direction: column; gap: 5px; }
-        .sv-label { font-size: .75rem; font-weight: 700; color: var(--muted-foreground); }
-        .sv-input {
-          height: 44px; border-radius: 12px;
-          border: 1.5px solid var(--border);
-          background: var(--muted);
-          padding: 0 12px;
-          font-size: .88rem;
-          color: var(--foreground);
-          outline: none;
-          width: 100%;
-          transition: border-color .15s;
-        }
-        .sv-input:focus { border-color: var(--primary); }
-      `}</style>
+            {/* Custom CSS for hidden scrollbars & smooth transitions */}
+            <style jsx global>{`
+                .no-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                .no-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+            `}</style>
         </>
     );
 }
